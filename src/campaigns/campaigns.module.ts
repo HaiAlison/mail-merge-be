@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CampaignsService } from './campaigns.service';
 import { CampaignsController } from './campaigns.controller';
@@ -8,8 +8,16 @@ import { CampaignAttachment } from '../entity/campaign-attachment.entity';
 import { CampaignEmailLog } from '../entity/campaign-email-log.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Campaign, CampaignRecipient, CampaignAttachment, CampaignEmailLog])],
+  imports: [
+    TypeOrmModule.forFeature([
+      Campaign,
+      CampaignRecipient,
+      CampaignAttachment,
+      CampaignEmailLog,
+    ]),
+  ],
   controllers: [CampaignsController],
   providers: [CampaignsService],
+  exports: [CampaignsService],
 })
-export class CampaignsModule { }
+export class CampaignsModule {}

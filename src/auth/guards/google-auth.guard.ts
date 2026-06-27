@@ -3,25 +3,26 @@ import { AuthGuard } from '@nestjs/passport';
 
 @Injectable()
 export class GoogleAuthGuard extends AuthGuard('google') {
-    constructor() {
-        super({
-            accessType: 'offline',
-            prompt: 'consent',
-            scope: ['email', 'profile', 'https://www.googleapis.com/auth/gmail.send'],
-        });
+  constructor() {
+    super({
+      accessType: 'offline',
+      scope: ['email', 'profile', 'https://www.googleapis.com/auth/gmail.send'],
+    });
+  }
+  canActivate(context: ExecutionContext) {
+    const request = context.switchToHttp().getRequest();
+    if (request.query['error']) {
+      console.error(
+        'Google OAuth Error:',
+        request.query['error'],
+      );
+      const frontendUrl = (process.env.FRONTEND_URL ?? 'http://localhost:3003').split(',')[0];
+      context
+        .switchToHttp()
+        .getResponse()
+        .redirect(`${frontendUrl}/auth/callback?error=${request.query['error']}`);
+      return false;
     }
-    canActivate(context: ExecutionContext) {
-        if (context.switchToHttp().getRequest().query['error']) {
-            console.error(
-                'Google OAuth Error:',
-                context.switchToHttp().getRequest().query['error'],
-            );
-            //redirect to frontend with error
-            context
-                .switchToHttp()
-                .getResponse()
-                .redirect(`${process.env.FRONTEND_URL}/auth/callback?error=1`);
-        }
-        return super.canActivate(context);
-    }
+    return super.canActivate(context);
+  }
 }
