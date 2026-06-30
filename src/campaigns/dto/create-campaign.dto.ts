@@ -28,6 +28,10 @@ export class CreateCampaignDto {
   @ValidateNested({ each: true })
   recipients: Record<string, any>[]; // Array of objects with email and other keys
 
+  @IsNotEmpty()
+  @IsUUID()
+  dataSourceId: string;
+
   @IsOptional()
   @IsArray()
   @IsUUID('all', { each: true })

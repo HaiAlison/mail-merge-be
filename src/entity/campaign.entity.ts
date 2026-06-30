@@ -1,17 +1,18 @@
 import {
-  Entity,
-  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  UpdateDateColumn,
-  OneToMany,
+  Entity,
   Index,
+  OneToMany,
+  OneToOne,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
 } from 'typeorm';
-import { CampaignStatus } from './enums';
-import { CampaignRecipient } from './campaign-recipient.entity';
 import { CampaignAttachment } from './campaign-attachment.entity';
+import { CampaignDataSource } from './campaign-data-source.entity';
 import { CampaignEmailLog } from './campaign-email-log.entity';
-
+import { CampaignRecipient } from './campaign-recipient.entity';
+import { CampaignStatus } from './enums';
 @Entity('campaigns')
 export class Campaign {
   @PrimaryGeneratedColumn('uuid')
@@ -67,6 +68,9 @@ export class Campaign {
 
   @OneToMany(() => CampaignAttachment, (attachment) => attachment.campaign)
   attachments: CampaignAttachment[];
+
+  @OneToOne(() => CampaignDataSource, (datasource) => datasource.campaign)
+  dataSource: CampaignDataSource;
 
   @OneToMany(() => CampaignEmailLog, (log) => log.campaign)
   emailLogs: CampaignEmailLog[];

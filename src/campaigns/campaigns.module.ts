@@ -6,6 +6,8 @@ import { Campaign } from '../entity/campaign.entity';
 import { CampaignRecipient } from '../entity/campaign-recipient.entity';
 import { CampaignAttachment } from '../entity/campaign-attachment.entity';
 import { CampaignEmailLog } from '../entity/campaign-email-log.entity';
+import { MailModule } from '../mail/mail.module';
+import { CampaignDataSource } from 'src/entity/campaign-data-source.entity';
 
 @Module({
   imports: [
@@ -13,11 +15,13 @@ import { CampaignEmailLog } from '../entity/campaign-email-log.entity';
       Campaign,
       CampaignRecipient,
       CampaignAttachment,
+      CampaignDataSource,
       CampaignEmailLog,
     ]),
+    MailModule,
   ],
   controllers: [CampaignsController],
   providers: [CampaignsService],
   exports: [CampaignsService],
 })
-export class CampaignsModule {}
+export class CampaignsModule { }
