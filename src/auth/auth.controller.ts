@@ -26,6 +26,7 @@ export class AuthController {
       user: {
         user: { id: string; email: string };
         googleAccessToken: string;
+        googleRefreshToken: string;
       };
     },
     @Res() res: Response,
@@ -47,12 +48,12 @@ export class AuthController {
   /** Rotate app JWT refresh → new access + refresh pair */
   @Post('refresh')
   async refreshAppTokens(@Body() body: RefreshTokenDto) {
-    return this.authService.refreshAppTokens(body.refreshToken);
+    return this.authService.refreshAppTokens(body.refresh_token);
   }
 
   /** Refresh Google OAuth access token (used before Gmail API calls) */
   @Post('google/refresh')
-  async refreshGoogleToken(@Body('refreshToken') refreshToken: string) {
-    return this.authService.refreshGoogleOAuthToken(refreshToken);
+  async refreshGoogleToken(@Body('refresh_token') refresh_token: string) {
+    return this.authService.refreshGoogleOAuthToken(refresh_token);
   }
 }

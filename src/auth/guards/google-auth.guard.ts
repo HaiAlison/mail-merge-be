@@ -3,12 +3,13 @@ import { AuthGuard } from '@nestjs/passport';
 
 @Injectable()
 export class GoogleAuthGuard extends AuthGuard('google') {
-  constructor() {
-    super({
+  getAuthenticateOptions(context: ExecutionContext) {
+    return {
       accessType: 'offline',
       scope: ['email', 'profile', 'https://www.googleapis.com/auth/gmail.send'],
-    });
+    };
   }
+
   canActivate(context: ExecutionContext) {
     const request = context.switchToHttp().getRequest();
     if (request.query['error']) {

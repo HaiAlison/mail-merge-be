@@ -1,23 +1,25 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { google } from 'googleapis';
+import 'multer';
+import { CampaignDataSource } from 'src/entity/campaign-data-source.entity';
+import { GmailAuthService } from 'src/mail/gmail-auth.service';
+import { MailService } from 'src/mail/mail.service';
+import { UsersService } from 'src/users/users.service';
+import { handleError } from 'src/utils/common/handle';
 import { Repository } from 'typeorm';
-import { CreateCampaignDto } from './dto/create-campaign.dto';
-import { UpdateCampaignDto } from './dto/update-campaign.dto';
-import { CreateRecipientDto } from './dto/create-recipient.dto';
-import { Campaign } from '../entity/campaign.entity';
-import { CampaignRecipient } from '../entity/campaign-recipient.entity';
+import { uuid } from 'uuidv4';
 import { CampaignAttachment } from '../entity/campaign-attachment.entity';
 import { CampaignEmailLog } from '../entity/campaign-email-log.entity';
-import 'multer';
-import { handleError } from 'src/utils/common/handle';
-import { uuid } from 'uuidv4';
-import { JwtPayload } from 'src/auth/strategies/jwt.strategy';
-import { MailQueueProducer } from '../mail/mail-queue.producer';
+import { CampaignRecipient } from '../entity/campaign-recipient.entity';
+import { Campaign } from '../entity/campaign.entity';
 import { CampaignStatus } from '../entity/enums';
 import { User } from '../entity/user.entity';
+import { MailQueueProducer } from '../mail/mail-queue.producer';
 import { UploadType } from './campaign.type';
-import { CampaignDataSource } from 'src/entity/campaign-data-source.entity';
-
+import { CreateCampaignDto } from './dto/create-campaign.dto';
+import { CreateRecipientDto } from './dto/create-recipient.dto';
+import { UpdateCampaignDto } from './dto/update-campaign.dto';
 // Define interface for Multer file since types might be missing
 export interface MulterFile {
   fieldname: string;
@@ -45,28 +47,44 @@ export class CampaignsService {
     @InjectRepository(CampaignEmailLog)
     private emailLogRepository: Repository<CampaignEmailLog>,
     private readonly mailQueueProducer: MailQueueProducer,
+    private readonly usersService: UsersService,
+    private readonly mailService: MailService,
+    private readonly gmailAuthService: GmailAuthService,
   ) { }
 
-  async create(createCampaignDto: CreateCampaignDto, jwtPayload: JwtPayload) {
-    const { subject, content, recipients, attachmentIds, name, status, dataSourceId } = createCampaignDto;
+  async create(createCampaignDto: CreateCampaignDto, user: User) {
+    const { subject, content, recipients, placeholders, placeholdersMap, attachmentIds, name, status, dataSourceId } = createCampaignDto;
 
     const campaign = this.campaignRepository.create({
       name,
       subject,
       content,
       totalRecipients: recipients?.length || 0,
-      userId: jwtPayload.sub,
+      userId: user.id,
       status,
+      placeholders: placeholders,
+      placeholdersMap: placeholdersMap || {}
     });
     const savedCampaign = await this.campaignRepository.save(campaign);
 
     if (recipients?.length) {
       const recipientEntities = recipients.map((r) => {
         const { email, ...data } = r;
+
+        const mappedData: Record<string, any> = {};
+        if (placeholdersMap) {
+          for (const [origKey, val] of Object.entries(data)) {
+            const mappedKey = placeholdersMap[origKey];
+            mappedData[mappedKey || origKey] = val;
+          }
+        } else {
+          Object.assign(mappedData, data);
+        }
+
         return this.recipientRepository.create({
           campaign: savedCampaign,
           email,
-          data,
+          data: mappedData,
         });
       });
       await this.recipientRepository.save(recipientEntities);
@@ -184,8 +202,20 @@ export class CampaignsService {
     createRecipientDto: CreateRecipientDto,
   ) {
     const campaign = await this.findOne(campaignId);
+
+    const mappedData: Record<string, any> = {};
+    if (campaign.placeholdersMap) {
+      for (const [origKey, val] of Object.entries(createRecipientDto.data || {})) {
+        const mappedKey = campaign.placeholdersMap[origKey];
+        mappedData[mappedKey || origKey] = val;
+      }
+    } else {
+      Object.assign(mappedData, createRecipientDto.data || {});
+    }
+
     const recipient = this.recipientRepository.create({
       ...createRecipientDto,
+      data: mappedData,
       campaign,
     });
     await this.recipientRepository.save(recipient);
@@ -288,6 +318,170 @@ export class CampaignsService {
       queued: recipients.length,
       scheduledAt: scheduledAt?.toISOString() ?? null,
     };
+  }
+
+  async resumeCampaign(
+    campaignId: string,
+    user: User,
+  ) {
+    const campaign = await this.campaignRepository.findOne({
+      where: { id: campaignId },
+      relations: ['recipients'],
+    });
+
+    if (!campaign) {
+      throw new NotFoundException(`Campaign ${campaignId} not found`);
+    }
+
+    if (campaign.userId !== user.id) {
+      throw new BadRequestException('You do not own this campaign');
+    }
+
+    if (campaign.status !== CampaignStatus.PAUSED) {
+      throw new BadRequestException(`Campaign is not paused, current status: ${campaign.status}`);
+    }
+
+    const recipients = campaign.recipients ?? [];
+    if (recipients.length === 0) {
+      throw new BadRequestException('Campaign has no recipients');
+    }
+
+    // Filter recipients that are not successfully sent yet
+    const pendingRecipients = recipients.filter(r => r.status !== 'sent' as any);
+
+    if (pendingRecipients.length === 0) {
+      await this.campaignRepository.update(campaignId, { status: CampaignStatus.SENT });
+      return { campaignId, resumed: 0 };
+    }
+
+    const from = `${user.firstName ?? 'Sender'} <${user.email}>`;
+
+    // 1. Create email log entries for the pending recipients
+    const logs = this.emailLogRepository.create(
+      pendingRecipients.map((r) => ({
+        campaignId,
+        recipientId: r.id,
+        status: 'queued',
+        metadata: {
+          from,
+          to: [r.email],
+          subject: campaign.subject,
+          resumedAt: new Date().toISOString(),
+        },
+      })),
+    );
+    const savedLogs = await this.emailLogRepository.save(logs);
+
+    // 2. Render mail-merge variables and build job payloads
+    const payloads = pendingRecipients.map((recipient, i) => ({
+      emailLogId: savedLogs[i].id,
+      userId: user.id,
+      campaignId,
+      recipientId: recipient.id,
+      from,
+      to: [recipient.email],
+      subject: renderTemplate(campaign.subject, recipient.data),
+      html: renderTemplate(campaign.content, recipient.data),
+      idempotencyKey: `${campaignId}_resume_${recipient.id}_${savedLogs[i].id}`,
+    }));
+
+    // 3. Enqueue batch
+    await this.mailQueueProducer.enqueueBatch(payloads);
+
+    // 4. Update campaign status
+    await this.campaignRepository.update(campaignId, {
+      status: CampaignStatus.SENDING,
+    });
+
+    return {
+      campaignId,
+      resumed: pendingRecipients.length,
+    };
+  }
+
+  async sendTestCampaign(campaignId: string, user: User, testEmail: string) {
+    const campaign = await this.campaignRepository.findOne({
+      where: { id: campaignId },
+      relations: ['recipients'],
+    });
+
+    if (!campaign) {
+      throw new NotFoundException(`Campaign ${campaignId} not found`);
+    }
+
+    console.log(campaign.userId, user.id)
+    if (campaign.userId !== user.id) {
+      throw new BadRequestException('You do not own this campaign');
+    }
+
+    const from = `${user.firstName ?? 'Sender'} <${user.email}>`;
+
+    // Use first recipient's data if available, or dummy data
+    const dummyData = campaign.recipients?.[0]?.data ?? {};
+
+    // 1. Create email log entry for the test email
+    const log = this.emailLogRepository.create({
+      campaignId,
+      status: 'queued',
+      metadata: {
+        from,
+        to: [testEmail],
+        subject: campaign.subject,
+        isTest: true,
+      },
+    });
+    const savedLog = await this.emailLogRepository.save(log);
+
+    // 2. Render mail-merge variables and build job payload
+    const payload = {
+      emailLogId: savedLog.id,
+      userId: user.id,
+      campaignId,
+      from,
+      to: [testEmail],
+      subject: renderTemplate(campaign.subject, dummyData),
+      html: renderTemplate(campaign.content, dummyData),
+      idempotencyKey: `${campaignId}_test_${savedLog.id}`,
+      isTest: true,
+    };
+
+    // 3. Get OAuth2 client
+    const oauth2Client = await this.gmailAuthService.getOAuth2Client(user.id);
+    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+
+    // 4. Build raw MIME message
+    const raw = this.mailService.buildRawEmail(payload);
+
+    // 5. Send directly via Gmail API
+    try {
+      const response = await gmail.users.messages.send({
+        userId: 'me',
+        requestBody: { raw },
+      });
+
+      const gmailMessageId = response.data.id!;
+
+      // Update log to 'sent'
+      await this.emailLogRepository.update(savedLog.id, {
+        status: 'sent',
+        metadata: { ...savedLog.metadata, gmailMessageId, sentAt: new Date().toISOString() } as any,
+      });
+
+      return {
+        campaignId,
+        testEmail,
+        status: 'success',
+        gmailMessageId,
+      };
+    } catch (error) {
+      // Update log to 'failed'
+      await this.emailLogRepository.update(savedLog.id, {
+        status: 'failed',
+        metadata: { ...savedLog.metadata, error: error.message } as any,
+      });
+
+      throw new BadRequestException(`Failed to send test email: ${error.message}`);
+    }
   }
 }
 

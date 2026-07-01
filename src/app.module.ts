@@ -9,10 +9,13 @@ import { CampaignsModule } from './campaigns/campaigns.module';
 import { UsersModule } from './users/users.module';
 import { MailModule } from './mail/mail.module';
 import { BullModule } from '@nestjs/bullmq';
+import { NotificationsModule } from './notifications/notifications.module';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    EventEmitterModule.forRoot(),
     TypeOrmModule.forRootAsync(typeOrmAsyncConfig),
     // BullMQ global Redis connection — used by all queue modules
     BullModule.forRootAsync({
@@ -30,6 +33,7 @@ import { BullModule } from '@nestjs/bullmq';
     AuthModule,
     CampaignsModule,
     MailModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

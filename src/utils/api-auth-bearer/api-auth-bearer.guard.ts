@@ -1,12 +1,12 @@
 import {
-  Injectable,
   CanActivate,
   ExecutionContext,
   HttpException,
   HttpStatus,
+  Injectable,
 } from '@nestjs/common';
-import { Observable } from 'rxjs';
 import { JwtService } from '@nestjs/jwt';
+import { Observable } from 'rxjs';
 
 const jwtService = new JwtService();
 
@@ -17,9 +17,7 @@ export class ApiAuthBearerGuard implements CanActivate {
   ): boolean | Promise<boolean> | Observable<boolean> {
     const request = context.switchToHttp().getRequest();
     try {
-      const data = jwtService.decode(
-        request.headers['authorization']?.split('Bearer ')[1],
-      );
+      const data = jwtService.verify(request.headers['authorization']?.split('Bearer ')[1], { secret: process.env.JWT_SECRET })
       if (data) return true;
       throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
     } catch (e) {

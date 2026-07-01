@@ -6,11 +6,11 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { BuildRawEmailDto } from './dto/mail.dto';
-import { SendEmailDto, SendEmailResponseDto, GetEmailResponseDto } from './dto/send-email.dto';
-import { MailQueueProducer } from './mail-queue.producer';
 import { CampaignEmailLog } from '../entity/campaign-email-log.entity';
 import { User } from '../entity/user.entity';
+import { BuildRawEmailDto } from './dto/mail.dto';
+import { GetEmailResponseDto, SendEmailDto, SendEmailResponseDto } from './dto/send-email.dto';
+import { MailQueueProducer } from './mail-queue.producer';
 
 @Injectable()
 export class MailService {
@@ -108,6 +108,19 @@ export class MailService {
     // INTERNAL HELPERS
     // ─────────────────────────────────────────────────────────────────────────────
 
+    private encodeAddress(address: string): string {
+        const match = address.match(/^(.*?)\s*<(.+)>$/);
+        if (match) {
+            const name = match[1].trim().replace(/^"|"$/g, '').trim();
+            const email = match[2].trim();
+            if (name) {
+                const encodedName = `=?UTF-8?B?${Buffer.from(name).toString('base64')}?=`;
+                return `${encodedName} <${email}>`;
+            }
+        }
+        return address;
+    }
+
     /**
      * Build a base64url-encoded RFC 2822 MIME message for Gmail API.
      */
@@ -115,10 +128,12 @@ export class MailService {
         const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
         const subjectEncoded = `=?UTF-8?B?${Buffer.from(dto.subject).toString('base64')}?=`;
+        const fromEncoded = this.encodeAddress(dto.from);
+        const toEncoded = dto.to.map(address => this.encodeAddress(address)).join(', ');
 
         const headerLines = [
-            `From: ${dto.from}`,
-            `To: ${dto.to.join(', ')}`,
+            `From: ${fromEncoded}`,
+            `To: ${toEncoded}`,
             `Subject: ${subjectEncoded}`,
             `MIME-Version: 1.0`,
             `Content-Type: multipart/alternative; boundary="${boundary}"`,

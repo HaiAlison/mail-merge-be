@@ -1,16 +1,15 @@
-import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
-import { Logger } from '@nestjs/common';
+import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
+import { Logger, UnauthorizedException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Job } from 'bullmq';
-import { MAIL_QUEUE, SEND_EMAIL_JOB, SendEmailJobPayload } from './mail-queue.types';
-import { MailService } from './mail.service';
-import { GmailAuthService } from './gmail-auth.service';
-import { CampaignEmailLog } from '../entity/campaign-email-log.entity';
-import { CampaignRecipient } from '../entity/campaign-recipient.entity';
-import { Campaign } from '../entity/campaign.entity';
-import { RecipientStatus } from '../entity/enums';
+import { Job, UnrecoverableError } from 'bullmq';
 import { google } from 'googleapis';
+import { Repository } from 'typeorm';
+import { CampaignEmailLog } from '../entity/campaign-email-log.entity';
+import { NotificationsGateway } from '../notifications/notifications.gateway';
+import { GmailAuthService } from './gmail-auth.service';
+import { MAIL_QUEUE, SendEmailJobPayload } from './mail-queue.types';
+import { MailService } from './mail.service';
 
 @Processor(MAIL_QUEUE, {
   concurrency: 5, // process 5 emails in parallel per worker
@@ -23,10 +22,8 @@ export class MailQueueConsumer extends WorkerHost {
     private readonly gmailAuthService: GmailAuthService,
     @InjectRepository(CampaignEmailLog)
     private readonly emailLogRepository: Repository<CampaignEmailLog>,
-    @InjectRepository(CampaignRecipient)
-    private readonly recipientRepository: Repository<CampaignRecipient>,
-    @InjectRepository(Campaign)
-    private readonly campaignRepository: Repository<Campaign>,
+    private readonly notificationsGateway: NotificationsGateway,
+    private readonly eventEmitter: EventEmitter2,
   ) {
     super();
   }
@@ -41,7 +38,23 @@ export class MailQueueConsumer extends WorkerHost {
     });
 
     // 2. Get OAuth2 client with valid token
-    const oauth2Client = await this.gmailAuthService.getOAuth2Client(payload.userId);
+    let oauth2Client;
+    try {
+      oauth2Client = await this.gmailAuthService.getOAuth2Client(payload.userId);
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        this.notificationsGateway.sendToUser(payload.userId, 'campaign_error', {
+          campaignId: payload.campaignId,
+          message: 'Google Token expired. Please reconnect.',
+        });
+
+        if (payload.campaignId) {
+          this.eventEmitter.emit('campaign.pause', { campaignId: payload.campaignId });
+        }
+        throw new UnrecoverableError(error.message);
+      }
+      throw error;
+    }
 
     // 3. Build raw MIME message
     const raw = await this.mailService.buildRawEmail({
@@ -69,24 +82,8 @@ export class MailQueueConsumer extends WorkerHost {
       metadata: { gmailMessageId, sentAt: now.toISOString() } as any,
     });
 
-    // 6. Update recipient status (if linked to a campaign recipient)
-    if (payload.recipientId) {
-      await this.recipientRepository.update(payload.recipientId, {
-        status: RecipientStatus.SENT,
-        sentAt: now,
-        errorMessage: null,
-      });
-    }
-
-    // 7. Increment campaign sent_count (if linked to a campaign)
-    if (payload.campaignId) {
-      await this.campaignRepository.increment(
-        { id: payload.campaignId },
-        'sentCount',
-        1,
-      );
-      await this.checkAndMarkCampaignDone(payload.campaignId);
-    }
+    // 6. Emit email.sent event
+    this.eventEmitter.emit('email.sent', { payload, gmailMessageId });
 
     this.logger.log(`✅ Email ${job.id} sent — gmailMessageId=${gmailMessageId}`);
   }
@@ -107,40 +104,7 @@ export class MailQueueConsumer extends WorkerHost {
         metadata: { error: error.message, failedAt: new Date().toISOString() } as any,
       });
 
-      if (payload.recipientId) {
-        await this.recipientRepository.update(payload.recipientId, {
-          status: RecipientStatus.FAILED,
-          errorMessage: error.message,
-        });
-      }
-
-      if (payload.campaignId) {
-        await this.campaignRepository.increment(
-          { id: payload.campaignId },
-          'failedCount',
-          1,
-        );
-        await this.checkAndMarkCampaignDone(payload.campaignId);
-      }
-    }
-  }
-
-  /** Mark campaign as SENT once sent + failed counts equal total */
-  private async checkAndMarkCampaignDone(campaignId: string): Promise<void> {
-    const campaign = await this.campaignRepository.findOne({
-      where: { id: campaignId },
-    });
-    if (!campaign) return;
-
-    const total = campaign.totalRecipients ?? 0;
-    const done = (campaign.sentCount ?? 0) + (campaign.failedCount ?? 0);
-
-    if (total > 0 && done >= total) {
-      await this.campaignRepository.update(campaignId, {
-        status: campaign.failedCount === total ? 'failed' : 'sent' as any,
-        sentAt: new Date(),
-      });
-      this.logger.log(`Campaign ${campaignId} completed (${campaign.sentCount} sent, ${campaign.failedCount} failed)`);
+      this.eventEmitter.emit('email.failed', { payload, error });
     }
   }
 }
