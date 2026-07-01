@@ -25,3 +25,8 @@ export interface SendEmailJobPayload {
   /** Idempotency: campaignId_recipientId hoặc uuid */
   idempotencyKey: string;
 }
+
+export interface EmailSentEvent {
+  payload: SendEmailJobPayload;
+  gmailMessageId: string;
+}

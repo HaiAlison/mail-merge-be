@@ -34,6 +34,9 @@ export class Campaign {
   @Column('text', { array: true, default: '{}' })
   placeholders: string[];
 
+  @Column('jsonb', { name: 'placeholders_map', default: {} })
+  placeholdersMap: Record<string, string>;
+
   @Index()
   @Column({
     type: 'enum',
@@ -47,6 +50,9 @@ export class Campaign {
 
   @Column({ name: 'sent_count', default: 0 })
   sentCount?: number;
+
+  @Column({ name: 'scheduling_count', default: 0 })
+  schedulingCount?: number;
 
   @Column({ name: 'failed_count', default: 0 })
   failedCount?: number;

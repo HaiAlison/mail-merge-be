@@ -1,38 +1,35 @@
 import {
-  Controller,
-  Get,
-  Post,
   Body,
-  Patch,
-  Param,
+  Controller,
   Delete,
-  UseInterceptors,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UploadedFile,
   UploadedFiles,
   UseGuards,
-  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
-import { CampaignsService } from './campaigns.service';
-import { CreateCampaignDto } from './dto/create-campaign.dto';
-import { UpdateCampaignDto } from './dto/update-campaign.dto';
-import { CreateRecipientDto } from './dto/create-recipient.dto';
-import { JwtPayload } from 'src/auth/strategies/jwt.strategy';
-import { AuthUser } from 'src/utils/permission/user.decorator';
-import { ApiAuthBearerGuard } from 'src/utils/api-auth-bearer/api-auth-bearer.guard';
 import { AuthGuard } from '@nestjs/passport';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
+import { ApiOperation } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../entity/user.entity';
-import { ApiBody, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { UploadType } from './campaign.type';
+import { CampaignsService } from './campaigns.service';
+import { CreateCampaignDto } from './dto/create-campaign.dto';
+import { CreateRecipientDto } from './dto/create-recipient.dto';
+import { UpdateCampaignDto } from './dto/update-campaign.dto';
 
 @Controller('campaigns')
 export class CampaignsController {
   constructor(private readonly campaignsService: CampaignsService) { }
 
   @Post()
-  @UseGuards(ApiAuthBearerGuard)
-  create(@Body() createCampaignDto: CreateCampaignDto, @AuthUser() jwtPayload: JwtPayload) {
-    return this.campaignsService.create(createCampaignDto, jwtPayload);
+  @UseGuards(AuthGuard('jwt'))
+  create(@Body() createCampaignDto: CreateCampaignDto, @CurrentUser() user: User) {
+    return this.campaignsService.create(createCampaignDto, user);
   }
 
   @Post('/attachments')
@@ -96,5 +93,32 @@ export class CampaignsController {
     @Body() body: { scheduledAt?: string },
   ) {
     return this.campaignsService.sendCampaign(id, user, body);
+  }
+
+  @Post(':id/resume')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({
+    summary: 'Resume Campaign',
+    description: 'Resumes a paused campaign, re-enqueuing failed/pending recipients.',
+  })
+  resumeCampaign(
+    @Param('id') id: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.campaignsService.resumeCampaign(id, user);
+  }
+
+  @Post(':id/test')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({
+    summary: 'Send Test Campaign',
+    description: 'Sends a test email to the specified address using the first recipient\'s data.',
+  })
+  sendTestCampaign(
+    @Param('id') id: string,
+    @CurrentUser() user: User,
+    @Body() body: { email: string },
+  ) {
+    return this.campaignsService.sendTestCampaign(id, user, body.email);
   }
 }
