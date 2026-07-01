@@ -4,6 +4,7 @@ export enum CampaignStatus {
   SENDING = 'sending',
   SENT = 'sent',
   FAILED = 'failed',
+  PAUSED = 'paused',
 }
 
 export enum RecipientStatus {

@@ -1,14 +1,13 @@
 import {
-  Entity,
-  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  ManyToOne,
-  JoinColumn,
+  Entity,
   Index,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Campaign } from './campaign.entity';
-import { EmailLogStatus } from './enums';
 
 @Entity('campaign_email_logs')
 export class CampaignEmailLog {
@@ -26,8 +25,8 @@ export class CampaignEmailLog {
   campaign: Campaign;
 
   @Index()
-  @Column({ name: 'recipient_id', type: 'uuid' })
-  recipientId: string;
+  @Column({ name: 'recipient_id', type: 'uuid', nullable: true })
+  recipientId: string | null;
 
   // Assuming we might want a relation to CampaignRecipient later, but for now just ID
   // @ManyToOne(() => CampaignRecipient)

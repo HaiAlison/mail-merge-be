@@ -1,13 +1,13 @@
+import { ApiProperty } from '@nestjs/swagger';
 import {
-  IsString,
-  IsNotEmpty,
   IsArray,
-  ValidateNested,
-  IsOptional,
-  IsUUID,
   IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+  ValidateNested,
 } from 'class-validator';
-import { Type } from 'class-transformer';
 import { CampaignStatus } from 'src/entity/enums';
 
 
@@ -27,6 +27,20 @@ export class CreateCampaignDto {
   @IsArray()
   @ValidateNested({ each: true })
   recipients: Record<string, any>[]; // Array of objects with email and other keys
+
+  @ApiProperty()
+  @IsArray()
+  @IsString({ each: true })
+  placeholders: string[];
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  placeholdersMap?: Record<string, string>;
+
+  @ApiProperty()
+  @IsNotEmpty()
+  @IsUUID()
+  dataSourceId: string;
 
   @IsOptional()
   @IsArray()

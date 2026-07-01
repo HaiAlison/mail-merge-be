@@ -1,17 +1,18 @@
 import {
-  Entity,
-  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  UpdateDateColumn,
-  OneToMany,
+  Entity,
   Index,
+  OneToMany,
+  OneToOne,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
 } from 'typeorm';
-import { CampaignStatus } from './enums';
-import { CampaignRecipient } from './campaign-recipient.entity';
 import { CampaignAttachment } from './campaign-attachment.entity';
+import { CampaignDataSource } from './campaign-data-source.entity';
 import { CampaignEmailLog } from './campaign-email-log.entity';
-
+import { CampaignRecipient } from './campaign-recipient.entity';
+import { CampaignStatus } from './enums';
 @Entity('campaigns')
 export class Campaign {
   @PrimaryGeneratedColumn('uuid')
@@ -33,6 +34,9 @@ export class Campaign {
   @Column('text', { array: true, default: '{}' })
   placeholders: string[];
 
+  @Column('jsonb', { name: 'placeholders_map', default: {} })
+  placeholdersMap: Record<string, string>;
+
   @Index()
   @Column({
     type: 'enum',
@@ -46,6 +50,9 @@ export class Campaign {
 
   @Column({ name: 'sent_count', default: 0 })
   sentCount?: number;
+
+  @Column({ name: 'scheduling_count', default: 0 })
+  schedulingCount?: number;
 
   @Column({ name: 'failed_count', default: 0 })
   failedCount?: number;
@@ -67,6 +74,9 @@ export class Campaign {
 
   @OneToMany(() => CampaignAttachment, (attachment) => attachment.campaign)
   attachments: CampaignAttachment[];
+
+  @OneToOne(() => CampaignDataSource, (datasource) => datasource.campaign)
+  dataSource: CampaignDataSource;
 
   @OneToMany(() => CampaignEmailLog, (log) => log.campaign)
   emailLogs: CampaignEmailLog[];
