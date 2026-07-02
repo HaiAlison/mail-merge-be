@@ -24,9 +24,9 @@ export class CreateCampaignDto {
   @IsNotEmpty()
   content: string;
 
-  @IsArray()
-  @ValidateNested({ each: true })
-  recipients: Record<string, any>[]; // Array of objects with email and other keys
+  // @IsArray()
+  // @ValidateNested({ each: true })
+  // recipients: Record<string, any>[]; // Array of objects with email and other keys
 
   @ApiProperty()
   @IsArray()
