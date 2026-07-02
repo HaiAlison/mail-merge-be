@@ -10,15 +10,7 @@ import { Campaign } from './campaign.entity';
 
 @Entity('campaign_data_source')
 export class CampaignDataSource extends BaseTimeStampEntity {
-
-  @Index()
-  @Column({ name: 'campaign_id', type: 'uuid', nullable: true })
-  campaignId: string;
-
-  @OneToOne(() => Campaign, (campaign) => campaign.dataSource, {
-    onDelete: 'CASCADE',
-  })
-  @JoinColumn({ name: 'campaign_id' })
+  @OneToOne(() => Campaign, (campaign) => campaign.dataSource)
   campaign: Campaign;
 
   @Column({ name: 'file_name', length: 255 })

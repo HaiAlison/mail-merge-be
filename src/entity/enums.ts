@@ -7,6 +7,13 @@ export enum CampaignStatus {
   PAUSED = 'paused',
 }
 
+export enum ParseStatus {
+  PENDING = 'pending',
+  PROCESSING = 'processing',
+  DONE = 'done',
+  FAILED = 'failed',
+}
+
 export enum RecipientStatus {
   PENDING = 'pending',
   SENT = 'sent',

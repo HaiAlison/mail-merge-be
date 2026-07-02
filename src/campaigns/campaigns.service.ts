@@ -16,9 +16,11 @@ import { Campaign } from '../entity/campaign.entity';
 import { CampaignStatus } from '../entity/enums';
 import { User } from '../entity/user.entity';
 import { MailQueueProducer } from '../mail/mail-queue.producer';
+import { CampaignQueueProducer } from './campaign-queue.producer';
 import { UploadType } from './campaign.type';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { CreateRecipientDto } from './dto/create-recipient.dto';
+import { FileParserService } from './file-parser.service';
 import { UpdateCampaignDto } from './dto/update-campaign.dto';
 // Define interface for Multer file since types might be missing
 export interface MulterFile {
@@ -50,16 +52,18 @@ export class CampaignsService {
     private readonly usersService: UsersService,
     private readonly mailService: MailService,
     private readonly gmailAuthService: GmailAuthService,
+    private readonly fileParserService: FileParserService,
+    private readonly campaignQueueProducer: CampaignQueueProducer,
   ) { }
 
   async create(createCampaignDto: CreateCampaignDto, user: User) {
-    const { subject, content, recipients, placeholders, placeholdersMap, attachmentIds, name, status, dataSourceId } = createCampaignDto;
+    const { subject, content, placeholders, placeholdersMap, attachmentIds, name, status, dataSourceId } = createCampaignDto;
 
     const campaign = this.campaignRepository.create({
       name,
       subject,
       content,
-      totalRecipients: recipients?.length || 0,
+      totalRecipients: 0,
       userId: user.id,
       status,
       placeholders: placeholders,
@@ -67,40 +71,30 @@ export class CampaignsService {
     });
     const savedCampaign = await this.campaignRepository.save(campaign);
 
-    if (recipients?.length) {
-      const recipientEntities = recipients.map((r) => {
-        const { email, ...data } = r;
-
-        const mappedData: Record<string, any> = {};
-        if (placeholdersMap) {
-          for (const [origKey, val] of Object.entries(data)) {
-            const mappedKey = placeholdersMap[origKey];
-            mappedData[mappedKey || origKey] = val;
-          }
-        } else {
-          Object.assign(mappedData, data);
-        }
-
-        return this.recipientRepository.create({
-          campaign: savedCampaign,
-          email,
-          data: mappedData,
-        });
-      });
-      await this.recipientRepository.save(recipientEntities);
-    }
-
     if (dataSourceId) {
+      // Link data source to campaign
+      const dataSource = await this.datasourceRepository.findOne({ where: { id: dataSourceId } });
       await this.datasourceRepository
         .createQueryBuilder()
-        .update(CampaignDataSource)
-        .set({ campaign: savedCampaign })
-        .where('id = :id', { id: dataSourceId })
+        .update(Campaign)
+        .set({ dataSourceId: dataSourceId })
+        .where('id = :id', { id: campaign.id })
         .execute();
+
+      // Enqueue background parse job
+      if (dataSource) {
+        await this.campaignQueueProducer.enqueueParseFile({
+          campaignId: savedCampaign.id,
+          dataSourceId,
+          filePath: dataSource.filePath,
+          mimeType: dataSource.mimeType,
+          placeholdersMap: placeholdersMap || {},
+          userId: user.id,
+        });
+      }
     }
+
     if (attachmentIds?.length) {
-      // We need to use 'In' operator from typeorm, making sure it's imported
-      // Or loop/query builder. simpler to use In if imported, but safely:
       await this.attachmentRepository
         .createQueryBuilder()
         .update(CampaignAttachment)
@@ -114,12 +108,12 @@ export class CampaignsService {
 
   async processUpload(files: MulterFile[], type: UploadType) {
     try {
-      const promiseAttachments = []
-      const attachmentIds = []
+      const results: { id: string; headers?: string[] }[] = [];
+
       for (const file of files) {
-        const id = uuid()
+        const id = uuid();
         switch (type) {
-          case UploadType.ATTACHMENT:
+          case UploadType.ATTACHMENT: {
             const attachment = this.attachmentRepository.create({
               id,
               fileName: file.originalname,
@@ -127,10 +121,11 @@ export class CampaignsService {
               fileSize: String(file.size),
               mimeType: file.mimetype,
             });
-            promiseAttachments.push(this.attachmentRepository.save(attachment));
-            attachmentIds.push(id)
+            await this.attachmentRepository.save(attachment);
+            results.push({ id });
             break;
-          case UploadType.DATA_SOURCE:
+          }
+          case UploadType.DATA_SOURCE: {
             const dataSource = this.datasourceRepository.create({
               id,
               fileName: file.originalname,
@@ -138,16 +133,22 @@ export class CampaignsService {
               fileSize: String(file.size),
               mimeType: file.mimetype,
             });
-            promiseAttachments.push(this.datasourceRepository.save(dataSource));
-            attachmentIds.push(id)
-            break;
-        }
+            await this.datasourceRepository.save(dataSource);
 
+            // Extract headers and preview rows for FE to use in mapping and review
+            const preview = await this.fileParserService.extractPreview(file.path, file.mimetype, 3);
+            results.push({ id, headers: preview.headers, previewRows: preview.previewRows } as any);
+            break;
+          }
+        }
       }
-      await Promise.all(promiseAttachments);
-      return type === UploadType.DATA_SOURCE ? attachmentIds[0] : attachmentIds;
+
+      if (type === UploadType.DATA_SOURCE) {
+        return results[0]; // { id, headers }
+      }
+      return results.map(r => r.id); // attachment IDs array
     } catch (error) {
-      throw handleError(error)
+      throw handleError(error);
     }
   }
 
@@ -175,7 +176,7 @@ export class CampaignsService {
   async findOne(id: string) {
     const campaign = await this.campaignRepository.findOne({
       where: { id },
-      relations: ['recipients', 'attachments', 'dataSource'],
+      relations: ['recipients', 'attachments', 'dataSource', 'emailLogs'],
     });
     if (!campaign) {
       throw new NotFoundException(`Campaign with ID "${id}" not found`);

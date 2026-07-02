@@ -3,6 +3,7 @@ import {
   CreateDateColumn,
   Entity,
   Index,
+  JoinColumn,
   OneToMany,
   OneToOne,
   PrimaryGeneratedColumn,
@@ -12,7 +13,7 @@ import { CampaignAttachment } from './campaign-attachment.entity';
 import { CampaignDataSource } from './campaign-data-source.entity';
 import { CampaignEmailLog } from './campaign-email-log.entity';
 import { CampaignRecipient } from './campaign-recipient.entity';
-import { CampaignStatus } from './enums';
+import { CampaignStatus, ParseStatus } from './enums';
 @Entity('campaigns')
 export class Campaign {
   @PrimaryGeneratedColumn('uuid')
@@ -45,6 +46,14 @@ export class Campaign {
   })
   status: CampaignStatus;
 
+  @Column({
+    name: 'parse_status',
+    type: 'enum',
+    enum: ParseStatus,
+    default: ParseStatus.PENDING,
+  })
+  parseStatus: ParseStatus;
+
   @Column({ name: 'total_recipients', default: 0 })
   totalRecipients?: number;
 
@@ -75,7 +84,13 @@ export class Campaign {
   @OneToMany(() => CampaignAttachment, (attachment) => attachment.campaign)
   attachments: CampaignAttachment[];
 
-  @OneToOne(() => CampaignDataSource, (datasource) => datasource.campaign)
+  @Column({ name: 'data_source_id', type: 'uuid', nullable: true })
+  dataSourceId: string;
+
+  @OneToOne(() => CampaignDataSource, (datasource) => datasource.campaign, {
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ name: 'data_source_id' })
   dataSource: CampaignDataSource;
 
   @OneToMany(() => CampaignEmailLog, (log) => log.campaign)
