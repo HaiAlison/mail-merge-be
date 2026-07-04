@@ -13,15 +13,16 @@ export class GoogleAuthGuard extends AuthGuard('google') {
   canActivate(context: ExecutionContext) {
     const request = context.switchToHttp().getRequest();
     if (request.query['error']) {
-      console.error(
-        'Google OAuth Error:',
-        request.query['error'],
-      );
-      const frontendUrl = (process.env.FRONTEND_URL ?? 'http://localhost:3003').split(',')[0];
+      console.error('Google OAuth Error:', request.query['error']);
+      const frontendUrl = (
+        process.env.FRONTEND_URL ?? 'http://localhost:3003'
+      ).split(',')[0];
       context
         .switchToHttp()
         .getResponse()
-        .redirect(`${frontendUrl}/auth/callback?error=${request.query['error']}`);
+        .redirect(
+          `${frontendUrl}/auth/callback?error=${request.query['error']}`,
+        );
       return false;
     }
     return super.canActivate(context);

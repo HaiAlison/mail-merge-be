@@ -23,11 +23,11 @@ export class User extends BaseTimeStampEntity {
   picture: string | null;
 
   /** Google OAuth refresh token — Google chỉ gửi lần đầu (hoặc khi re-consent); giữ lại nếu đã có */
-  @Column({ 
-    name: 'google_refresh_token', 
-    type: 'text', 
+  @Column({
+    name: 'google_refresh_token',
+    type: 'text',
     nullable: true,
-    transformer: encryptionTransformer 
+    transformer: encryptionTransformer,
   })
   googleRefreshToken: string | null;
 

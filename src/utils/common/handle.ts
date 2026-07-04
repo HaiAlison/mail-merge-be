@@ -6,7 +6,11 @@ import {
   Repository,
   SelectQueryBuilder,
 } from 'typeorm';
-import { DEFAULT_LIMIT_NUMBER, DEFAULT_PAGE_NUMBER, FILE_TYPES_IMPORT_ALLOWED } from './constant';
+import {
+  DEFAULT_LIMIT_NUMBER,
+  DEFAULT_PAGE_NUMBER,
+  FILE_TYPES_IMPORT_ALLOWED,
+} from './constant';
 import { FindOptionsWhere } from 'typeorm/find-options/FindOptionsWhere';
 import { PaginationResponse, PushFileOnCloud } from './interface';
 import axios, { AxiosError, Method } from 'axios';
@@ -34,8 +38,8 @@ export const handleError = (e) => {
   if (new RegExp('violates not-null constraint').test(e.message)) {
     throw new HttpException(
       'column ' +
-      e.message.match(/".*"/)[0]?.replace(/"/g, '') +
-      ' can not be null',
+        e.message.match(/".*"/)[0]?.replace(/"/g, '') +
+        ' can not be null',
       HttpStatus.BAD_REQUEST,
       {
         cause: new Error(
@@ -179,9 +183,9 @@ export const callAxios = async (
 
 export const cleanObject = (originalObject = {}) => {
   const validArrays = pickBy(
-    originalObject,
-    (e) => Array.isArray(e) && e.length > 0,
-  ),
+      originalObject,
+      (e) => Array.isArray(e) && e.length > 0,
+    ),
     validObjects = pickBy(
       originalObject,
       (e) =>
@@ -223,7 +227,7 @@ export const generateCodeBaseOnSequence = async (
     if (
       sequence_code.code &&
       Number(sequence_code.code.match(/\d+/g).join('')) <=
-      Number(max_code.code?.match(/\d+/g).join(''))
+        Number(max_code.code?.match(/\d+/g).join(''))
     ) {
       await transaction.query(
         `select max(code) as code from public.${table_name} where code ilike $1`,
@@ -250,16 +254,15 @@ export const fromToQuery = ({ from, to, tableName, field, query }) => {
   }
 };
 
-
 export const pushFileOnCloud = async (dto: PushFileOnCloud) => {
   const { dir, data, file_name } = dto;
   const fileType = await fromBuffer(data);
   const fileExtension = fileType.ext;
   if (!fileExtension) {
-    throw new BadRequestException("Định dạng file không hợp lệ")
+    throw new BadRequestException('Định dạng file không hợp lệ');
   }
   if (!FILE_TYPES_IMPORT_ALLOWED.includes(fileExtension)) {
-    throw new BadRequestException("Định dạng file không được phép")
+    throw new BadRequestException('Định dạng file không được phép');
   }
   try {
     const s3Configs = {
@@ -270,8 +273,8 @@ export const pushFileOnCloud = async (dto: PushFileOnCloud) => {
         accessKeyId: process.env.S3_ACCESS_KEY_ID,
         secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
       },
-    }
-    const s3Client = new S3Client(s3Configs)
+    };
+    const s3Client = new S3Client(s3Configs);
     const putObjectCommand = new PutObjectCommand({
       Bucket: process.env.S3_BUCKET_NAME,
       Key: `${dir}/${file_name}`,
@@ -282,9 +285,9 @@ export const pushFileOnCloud = async (dto: PushFileOnCloud) => {
   } catch (e) {
     throw handleError(e);
   }
-  console.log('File link: ')
+  console.log('File link: ');
   console.log(
     `${process.env.S3_ENDPOINT}/${process.env.S3_BUCKET_NAME}/${dir}/${file_name}`,
   );
   return file_name;
-}
+};

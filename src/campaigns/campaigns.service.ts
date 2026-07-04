@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { google } from 'googleapis';
 import 'multer';
@@ -22,6 +26,8 @@ import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { CreateRecipientDto } from './dto/create-recipient.dto';
 import { FileParserService } from './file-parser.service';
 import { UpdateCampaignDto } from './dto/update-campaign.dto';
+import { CursorPaginationDto } from 'src/utils/common/dto';
+import { cursorPagination, CursorPaginationResponse } from 'src/utils/common/cursor-pagination';
 // Define interface for Multer file since types might be missing
 export interface MulterFile {
   fieldname: string;
@@ -57,7 +63,16 @@ export class CampaignsService {
   ) { }
 
   async create(createCampaignDto: CreateCampaignDto, user: User) {
-    const { subject, content, placeholders, placeholdersMap, attachmentIds, name, status, dataSourceId } = createCampaignDto;
+    const {
+      subject,
+      content,
+      placeholders,
+      placeholdersMap,
+      attachmentIds,
+      name,
+      status,
+      dataSourceId,
+    } = createCampaignDto;
 
     const campaign = this.campaignRepository.create({
       name,
@@ -67,13 +82,15 @@ export class CampaignsService {
       userId: user.id,
       status,
       placeholders: placeholders,
-      placeholdersMap: placeholdersMap || {}
+      placeholdersMap: placeholdersMap || {},
     });
     const savedCampaign = await this.campaignRepository.save(campaign);
 
     if (dataSourceId) {
       // Link data source to campaign
-      const dataSource = await this.datasourceRepository.findOne({ where: { id: dataSourceId } });
+      const dataSource = await this.datasourceRepository.findOne({
+        where: { id: dataSourceId },
+      });
       await this.datasourceRepository
         .createQueryBuilder()
         .update(Campaign)
@@ -136,8 +153,16 @@ export class CampaignsService {
             await this.datasourceRepository.save(dataSource);
 
             // Extract headers and preview rows for FE to use in mapping and review
-            const preview = await this.fileParserService.extractPreview(file.path, file.mimetype, 3);
-            results.push({ id, headers: preview.headers, previewRows: preview.previewRows } as any);
+            const preview = await this.fileParserService.extractPreview(
+              file.path,
+              file.mimetype,
+              3,
+            );
+            results.push({
+              id,
+              headers: preview.headers,
+              previewRows: preview.previewRows,
+            } as any);
             break;
           }
         }
@@ -146,7 +171,7 @@ export class CampaignsService {
       if (type === UploadType.DATA_SOURCE) {
         return results[0]; // { id, headers }
       }
-      return results.map(r => r.id); // attachment IDs array
+      return results.map((r) => r.id); // attachment IDs array
     } catch (error) {
       throw handleError(error);
     }
@@ -159,18 +184,18 @@ export class CampaignsService {
         filePath: file.path,
         fileSize: String(file.size),
         mimeType: file.mimetype,
-        campaign: await this.findOne(campaignId)
+        campaign: await this.findOne(campaignId),
       });
       await this.attachmentRepository.save(attachment);
       return attachment;
     } catch (error) {
-      throw handleError(error)
+      throw handleError(error);
     }
   }
 
-
-  findAll() {
-    return this.campaignRepository.find();
+  async findAll(pagination: CursorPaginationDto): Promise<CursorPaginationResponse<Campaign>> {
+    const queryBuilder = this.campaignRepository.createQueryBuilder('campaign');
+    return await cursorPagination(queryBuilder, pagination)
   }
 
   async findOne(id: string) {
@@ -206,7 +231,9 @@ export class CampaignsService {
 
     const mappedData: Record<string, any> = {};
     if (campaign.placeholdersMap) {
-      for (const [origKey, val] of Object.entries(createRecipientDto.data || {})) {
+      for (const [origKey, val] of Object.entries(
+        createRecipientDto.data || {},
+      )) {
         const mappedKey = campaign.placeholdersMap[origKey];
         mappedData[mappedKey || origKey] = val;
       }
@@ -265,8 +292,13 @@ export class CampaignsService {
       throw new BadRequestException('You do not own this campaign');
     }
 
-    if (campaign.status === CampaignStatus.SENDING || campaign.status === CampaignStatus.SENT) {
-      throw new BadRequestException(`Campaign is already in status: ${campaign.status}`);
+    if (
+      campaign.status === CampaignStatus.SENDING ||
+      campaign.status === CampaignStatus.SENT
+    ) {
+      throw new BadRequestException(
+        `Campaign is already in status: ${campaign.status}`,
+      );
     }
 
     const recipients = campaign.recipients ?? [];
@@ -275,7 +307,9 @@ export class CampaignsService {
     }
 
     const from = `${user.firstName ?? 'Sender'} <${user.email}>`;
-    const scheduledAt = options?.scheduledAt ? new Date(options.scheduledAt) : undefined;
+    const scheduledAt = options?.scheduledAt
+      ? new Date(options.scheduledAt)
+      : undefined;
 
     // 1. Create email log entries for each recipient
     const logs = this.emailLogRepository.create(
@@ -321,10 +355,7 @@ export class CampaignsService {
     };
   }
 
-  async resumeCampaign(
-    campaignId: string,
-    user: User,
-  ) {
+  async resumeCampaign(campaignId: string, user: User) {
     const campaign = await this.campaignRepository.findOne({
       where: { id: campaignId },
       relations: ['recipients'],
@@ -339,7 +370,9 @@ export class CampaignsService {
     }
 
     if (campaign.status !== CampaignStatus.PAUSED) {
-      throw new BadRequestException(`Campaign is not paused, current status: ${campaign.status}`);
+      throw new BadRequestException(
+        `Campaign is not paused, current status: ${campaign.status}`,
+      );
     }
 
     const recipients = campaign.recipients ?? [];
@@ -348,10 +381,14 @@ export class CampaignsService {
     }
 
     // Filter recipients that are not successfully sent yet
-    const pendingRecipients = recipients.filter(r => r.status !== 'sent' as any);
+    const pendingRecipients = recipients.filter(
+      (r) => r.status !== ('sent' as any),
+    );
 
     if (pendingRecipients.length === 0) {
-      await this.campaignRepository.update(campaignId, { status: CampaignStatus.SENT });
+      await this.campaignRepository.update(campaignId, {
+        status: CampaignStatus.SENT,
+      });
       return { campaignId, resumed: 0 };
     }
 
@@ -410,7 +447,7 @@ export class CampaignsService {
       throw new NotFoundException(`Campaign ${campaignId} not found`);
     }
 
-    console.log(campaign.userId, user.id)
+    console.log(campaign.userId, user.id);
     if (campaign.userId !== user.id) {
       throw new BadRequestException('You do not own this campaign');
     }
@@ -460,12 +497,16 @@ export class CampaignsService {
         requestBody: { raw },
       });
 
-      const gmailMessageId = response.data.id!;
+      const gmailMessageId = response.data.id;
 
       // Update log to 'sent'
       await this.emailLogRepository.update(savedLog.id, {
         status: 'sent',
-        metadata: { ...savedLog.metadata, gmailMessageId, sentAt: new Date().toISOString() } as any,
+        metadata: {
+          ...savedLog.metadata,
+          gmailMessageId,
+          sentAt: new Date().toISOString(),
+        } as any,
       });
 
       return {
@@ -481,7 +522,9 @@ export class CampaignsService {
         metadata: { ...savedLog.metadata, error: error.message } as any,
       });
 
-      throw new BadRequestException(`Failed to send test email: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to send test email: ${error.message}`,
+      );
     }
   }
 }

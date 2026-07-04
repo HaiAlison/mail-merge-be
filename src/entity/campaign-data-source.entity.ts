@@ -1,11 +1,5 @@
 import { BaseTimeStampEntity } from 'src/utils/config/database/base-entity';
-import {
-  Column,
-  Entity,
-  Index,
-  JoinColumn,
-  OneToOne
-} from 'typeorm';
+import { Column, Entity, Index, JoinColumn, OneToOne } from 'typeorm';
 import { Campaign } from './campaign.entity';
 
 @Entity('campaign_data_source')

@@ -1,4 +1,4 @@
-import { I18nContext } from "nestjs-i18n";
+import { I18nContext } from 'nestjs-i18n';
 
 export interface PaginationResponse<T> {
   otherParams: any;
@@ -29,5 +29,4 @@ export interface PushFileOnCloud {
   data: Buffer;
   file_name: string;
   i18n?: I18nContext;
-
 }

@@ -26,7 +26,11 @@ export class FileParserService {
   // Extract the header row and a few preview rows
   // ─────────────────────────────────────────────────────────────────────────────
 
-  async extractPreview(filePath: string, mimeType: string, previewCount = 3): Promise<{ headers: string[], previewRows: ParsedRow[] }> {
+  async extractPreview(
+    filePath: string,
+    mimeType: string,
+    previewCount = 3,
+  ): Promise<{ headers: string[]; previewRows: ParsedRow[] }> {
     if (this.isCsv(mimeType)) {
       return this.extractCsvPreview(filePath, previewCount);
     }
@@ -36,7 +40,10 @@ export class FileParserService {
     throw new Error(`Unsupported file type: ${mimeType}`);
   }
 
-  private extractCsvPreview(filePath: string, previewCount: number): Promise<{ headers: string[], previewRows: ParsedRow[] }> {
+  private extractCsvPreview(
+    filePath: string,
+    previewCount: number,
+  ): Promise<{ headers: string[]; previewRows: ParsedRow[] }> {
     return new Promise((resolve, reject) => {
       const stream = fs.createReadStream(filePath);
       const parser = csv();
@@ -65,7 +72,10 @@ export class FileParserService {
     });
   }
 
-  private async extractXlsxPreview(filePath: string, previewCount: number): Promise<{ headers: string[], previewRows: ParsedRow[] }> {
+  private async extractXlsxPreview(
+    filePath: string,
+    previewCount: number,
+  ): Promise<{ headers: string[]; previewRows: ParsedRow[] }> {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(filePath);
     const sheet = workbook.worksheets[0];
@@ -174,10 +184,10 @@ export class FileParserService {
         const header = headers[colNum - 1];
         if (header) {
           let val = String(cell.value ?? '').trim();
-          if (typeof cell.value == "object" && 'text' in cell.value) {
+          if (typeof cell.value == 'object' && 'text' in cell.value) {
             val = String(cell.value.text ?? '').trim();
           }
-          console.log(val)
+          console.log(val);
           parsed[header] = val;
         }
       });
@@ -199,7 +209,8 @@ export class FileParserService {
 
   private isXlsx(mimeType: string): boolean {
     return (
-      mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+      mimeType ===
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
       mimeType === 'application/vnd.ms-excel'
     );
   }

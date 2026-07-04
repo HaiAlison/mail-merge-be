@@ -1,7 +1,11 @@
 import { InjectQueue } from '@nestjs/bullmq';
 import { Injectable } from '@nestjs/common';
 import { Queue } from 'bullmq';
-import { CAMPAIGN_QUEUE, PARSE_FILE_JOB, ParseFileJobPayload } from './campaign-queue.types';
+import {
+  CAMPAIGN_QUEUE,
+  PARSE_FILE_JOB,
+  ParseFileJobPayload,
+} from './campaign-queue.types';
 
 @Injectable()
 export class CampaignQueueProducer {

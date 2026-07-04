@@ -11,7 +11,7 @@ import {
 
 export class SendEmailDto {
   @ApiPropertyOptional({
-    description: 'Sender address. Defaults to user\'s Gmail if omitted.',
+    description: "Sender address. Defaults to user's Gmail if omitted.",
     example: 'Your Name <you@gmail.com>',
   })
   @IsString()
@@ -20,10 +20,7 @@ export class SendEmailDto {
 
   @ApiProperty({
     description: 'Recipient(s). Max 50.',
-    oneOf: [
-      { type: 'string' },
-      { type: 'array', items: { type: 'string' } },
-    ],
+    oneOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }],
     example: ['recipient@example.com'],
   })
   to: string | string[];
@@ -43,14 +40,18 @@ export class SendEmailDto {
   text?: string;
 
   @ApiPropertyOptional({
-    description: 'ISO 8601 datetime to schedule the email. e.g. 2026-08-05T11:00:00Z',
+    description:
+      'ISO 8601 datetime to schedule the email. e.g. 2026-08-05T11:00:00Z',
     example: '2026-08-05T11:00:00.000Z',
   })
   @IsDateString()
   @IsOptional()
   scheduledAt?: string;
 
-  @ApiPropertyOptional({ type: Object, example: { 'X-Custom-Header': 'value' } })
+  @ApiPropertyOptional({
+    type: Object,
+    example: { 'X-Custom-Header': 'value' },
+  })
   @IsObject()
   @IsOptional()
   headers?: Record<string, string>;
@@ -70,7 +71,10 @@ export class SendEmailDto {
 // ─── Response DTOs ───────────────────────────────────────────────────────────
 
 export class SendEmailResponseDto {
-  @ApiProperty({ description: 'Email log ID (equivalent to Resend email ID)', example: 'a1b2c3d4-...' })
+  @ApiProperty({
+    description: 'Email log ID (equivalent to Resend email ID)',
+    example: 'a1b2c3d4-...',
+  })
   id: string;
 }
 
@@ -94,7 +98,10 @@ export class GetEmailResponseDto {
   })
   status: string;
 
-  @ApiPropertyOptional({ description: 'Gmail message ID after successful send', nullable: true })
+  @ApiPropertyOptional({
+    description: 'Gmail message ID after successful send',
+    nullable: true,
+  })
   gmailMessageId: string | null;
 
   @ApiPropertyOptional({ nullable: true })

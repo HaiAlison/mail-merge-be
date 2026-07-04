@@ -47,7 +47,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
       if ((exception as any).code === '23505') {
         statusCode = HttpStatus.BAD_REQUEST;
         errorCode = 'UNIQUE_CONSTRAINT';
-        const match = (exception as any).detail?.match(/Key \((.*?)\)=\((.*?)\)/);
+        const match = (exception as any).detail?.match(
+          /Key \((.*?)\)=\((.*?)\)/,
+        );
         if (match) {
           message = `Đã tồn tại ${match[1]}: ${match[2]}`;
         } else {

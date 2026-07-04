@@ -47,7 +47,10 @@ export class GmailAuthService {
       oauth2Client.setCredentials(credentials);
       this.logger.debug(`Token refreshed for user ${userId}`);
     } catch (error) {
-      this.logger.error(`Failed to refresh token for user ${userId}`, error.message);
+      this.logger.error(
+        `Failed to refresh token for user ${userId}`,
+        error.message,
+      );
       throw new UnauthorizedException(
         `Failed to refresh Google access token for user ${userId}. Please re-authenticate.`,
       );

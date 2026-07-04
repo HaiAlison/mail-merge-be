@@ -18,7 +18,7 @@ export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-  ) { }
+  ) {}
 
   /** Create or update a user from Google OAuth profile data */
   async upsertGoogleUser(input: UpsertGoogleUserInput): Promise<User> {

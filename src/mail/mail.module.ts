@@ -37,4 +37,4 @@ import { MailService } from './mail.service';
   ],
   exports: [MailService, MailQueueProducer, GmailAuthService],
 })
-export class MailModule { }
+export class MailModule {}

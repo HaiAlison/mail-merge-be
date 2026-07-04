@@ -7,7 +7,11 @@ import { Campaign } from '../entity/campaign.entity';
 import { CampaignRecipient } from '../entity/campaign-recipient.entity';
 import { ParseStatus } from '../entity/enums';
 import { NotificationsGateway } from '../notifications/notifications.gateway';
-import { CAMPAIGN_QUEUE, PARSE_FILE_JOB, ParseFileJobPayload } from './campaign-queue.types';
+import {
+  CAMPAIGN_QUEUE,
+  PARSE_FILE_JOB,
+  ParseFileJobPayload,
+} from './campaign-queue.types';
 import { FileParserService, ParsedRow } from './file-parser.service';
 
 const BATCH_SIZE = 500;
@@ -30,7 +34,8 @@ export class CampaignQueueConsumer extends WorkerHost {
   async process(job: Job<ParseFileJobPayload>): Promise<void> {
     if (job.name !== PARSE_FILE_JOB) return;
 
-    const { campaignId, filePath, mimeType, placeholdersMap, userId } = job.data;
+    const { campaignId, filePath, mimeType, placeholdersMap, userId } =
+      job.data;
     this.logger.log(`[${campaignId}] Starting file parse job`);
 
     // Mark campaign as processing
@@ -38,7 +43,9 @@ export class CampaignQueueConsumer extends WorkerHost {
       parseStatus: ParseStatus.PROCESSING,
     });
 
-    this.notificationsGateway.sendToUser(userId, 'campaign.parse.started', { campaignId });
+    this.notificationsGateway.sendToUser(userId, 'campaign.parse.started', {
+      campaignId,
+    });
 
     try {
       let batch: Omit<Partial<CampaignRecipient>, 'id'>[] = [];
@@ -84,10 +91,14 @@ export class CampaignQueueConsumer extends WorkerHost {
           totalProcessed = processed;
           // Emit progress every 500 rows
           if (processed % BATCH_SIZE === 0) {
-            this.notificationsGateway.sendToUser(userId, 'campaign.parse.progress', {
-              campaignId,
-              processed,
-            });
+            this.notificationsGateway.sendToUser(
+              userId,
+              'campaign.parse.progress',
+              {
+                campaignId,
+                processed,
+              },
+            );
           }
         },
       );
@@ -96,7 +107,9 @@ export class CampaignQueueConsumer extends WorkerHost {
       await flushBatch();
 
       // Update campaign with final count and mark done
-      const totalRecipients = await this.recipientRepository.count({ where: { campaignId } });
+      const totalRecipients = await this.recipientRepository.count({
+        where: { campaignId },
+      });
       await this.campaignRepository.update(campaignId, {
         parseStatus: ParseStatus.DONE,
         totalRecipients,
@@ -107,7 +120,9 @@ export class CampaignQueueConsumer extends WorkerHost {
         totalRecipients,
       });
 
-      this.logger.log(`[${campaignId}] Parse job completed: ${totalRecipients} recipients`);
+      this.logger.log(
+        `[${campaignId}] Parse job completed: ${totalRecipients} recipients`,
+      );
     } catch (error) {
       this.logger.error(`[${campaignId}] Parse job failed:`, error);
 

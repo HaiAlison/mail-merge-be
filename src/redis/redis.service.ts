@@ -16,21 +16,18 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
   private client: Redis;
 
-  constructor(private readonly config: ConfigService) { }
+  constructor(private readonly config: ConfigService) {}
 
   onModuleInit() {
-    this.client = new Redis(
-      this.config.getOrThrow<string>('REDIS_URL'),
-      {
-        maxRetriesPerRequest: 3,
-        // enableOfflineQueue: false,
-        connectTimeout: 10_000,
-        commandTimeout: 5_000,
-        lazyConnect: false,
-        keepAlive: 30_000,
-        family: 4,
-      },
-    );
+    this.client = new Redis(this.config.getOrThrow<string>('REDIS_URL'), {
+      maxRetriesPerRequest: 3,
+      // enableOfflineQueue: false,
+      connectTimeout: 10_000,
+      commandTimeout: 5_000,
+      lazyConnect: false,
+      keepAlive: 30_000,
+      family: 4,
+    });
 
     this.client.on('connect', () => this.logger.log('Redis connected'));
     this.client.on('error', (err) => this.logger.error('Redis error', err));

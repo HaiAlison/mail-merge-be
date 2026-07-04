@@ -1,11 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  Post,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -14,7 +7,11 @@ import {
 } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { MailService } from './mail.service';
-import { SendEmailDto, SendEmailResponseDto, GetEmailResponseDto } from './dto/send-email.dto';
+import {
+  SendEmailDto,
+  SendEmailResponseDto,
+  GetEmailResponseDto,
+} from './dto/send-email.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../entity/user.entity';
 
