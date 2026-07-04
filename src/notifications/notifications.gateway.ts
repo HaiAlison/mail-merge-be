@@ -12,7 +12,9 @@ import { Server, Socket } from 'socket.io';
     origin: '*', // Adjust to your frontend URL in production
   },
 })
-export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class NotificationsGateway
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
   private readonly logger = new Logger(NotificationsGateway.name);
 
   @WebSocketServer()
@@ -23,7 +25,9 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
     if (userId) {
       // Join a room unique to this user
       client.join(`user_${userId}`);
-      this.logger.log(`Client connected: ${client.id} - Joined room: user_${userId}`);
+      this.logger.log(
+        `Client connected: ${client.id} - Joined room: user_${userId}`,
+      );
     } else {
       this.logger.warn(`Client connected without userId: ${client.id}`);
     }

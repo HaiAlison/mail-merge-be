@@ -43,7 +43,10 @@ export class CampaignsListener {
         await this.checkAndMarkCampaignDone(payload.campaignId);
       }
     } catch (error) {
-      this.logger.error(`Error handling email.sent event for campaign ${payload.campaignId}:`, error);
+      this.logger.error(
+        `Error handling email.sent event for campaign ${payload.campaignId}:`,
+        error,
+      );
     }
   }
 
@@ -58,17 +61,22 @@ export class CampaignsListener {
 
     if (total > 0 && done >= total) {
       await this.campaignRepository.update(campaignId, {
-        status: campaign.failedCount === total ? 'failed' : 'sent' as any,
+        status: campaign.failedCount === total ? 'failed' : ('sent' as any),
         sentAt: new Date(),
       });
-      this.logger.log(`Campaign ${campaignId} completed (${campaign.sentCount} sent, ${campaign.failedCount} failed)`);
+      this.logger.log(
+        `Campaign ${campaignId} completed (${campaign.sentCount} sent, ${campaign.failedCount} failed)`,
+      );
     }
   }
 
   @OnEvent('email.failed')
-  async handleEmailFailedEvent(event: { payload: EmailSentEvent['payload'], error: Error }) {
+  async handleEmailFailedEvent(event: {
+    payload: EmailSentEvent['payload'];
+    error: Error;
+  }) {
     const { payload, error } = event;
-    
+
     try {
       if (payload.recipientId) {
         await this.recipientRepository.update(payload.recipientId, {
@@ -86,18 +94,25 @@ export class CampaignsListener {
         await this.checkAndMarkCampaignDone(payload.campaignId);
       }
     } catch (err) {
-      this.logger.error(`Error handling email.failed event for campaign ${payload.campaignId}:`, err);
+      this.logger.error(
+        `Error handling email.failed event for campaign ${payload.campaignId}:`,
+        err,
+      );
     }
   }
 
   @OnEvent('campaign.pause')
   async handleCampaignPauseEvent(event: { campaignId: string }) {
     try {
-      await this.campaignRepository.update(event.campaignId, { status: 'paused' as any });
+      await this.campaignRepository.update(event.campaignId, {
+        status: 'paused' as any,
+      });
       this.logger.log(`Campaign ${event.campaignId} paused due to error`);
     } catch (err) {
-      this.logger.error(`Error handling campaign.pause event for campaign ${event.campaignId}:`, err);
+      this.logger.error(
+        `Error handling campaign.pause event for campaign ${event.campaignId}:`,
+        err,
+      );
     }
   }
 }
-

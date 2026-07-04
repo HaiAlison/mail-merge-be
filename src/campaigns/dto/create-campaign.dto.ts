@@ -10,7 +10,6 @@ import {
 } from 'class-validator';
 import { CampaignStatus } from 'src/entity/enums';
 
-
 export class CreateCampaignDto {
   @IsString()
   @IsNotEmpty()
@@ -50,5 +49,4 @@ export class CreateCampaignDto {
   @IsNotEmpty()
   @IsEnum(CampaignStatus)
   status: CampaignStatus;
-
 }

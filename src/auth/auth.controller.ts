@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Req, Res, UseGuards, Body } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Req,
+  Res,
+  UseGuards,
+  Body,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
 import { AuthService } from './auth.service';
@@ -10,13 +18,13 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly configService: ConfigService,
-  ) { }
+  ) {}
 
   // ─── Google OAuth ──────────────────────────────────────────────────
 
   @Get('google')
   @UseGuards(GoogleAuthGuard)
-  async googleAuth() { }
+  async googleAuth() {}
 
   @Get('google/callback')
   @UseGuards(GoogleAuthGuard)

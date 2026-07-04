@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UploadedFile,
   UploadedFiles,
   UseGuards,
@@ -21,6 +22,10 @@ import { CampaignsService } from './campaigns.service';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { CreateRecipientDto } from './dto/create-recipient.dto';
 import { UpdateCampaignDto } from './dto/update-campaign.dto';
+import { CursorPaginationDto } from 'src/utils/common/dto';
+import { Response } from 'src/utils/interceptors/transform.interceptor';
+import { CursorPaginationResponse } from 'src/utils/common/cursor-pagination';
+import { Campaign } from 'src/entity/campaign.entity';
 
 @Controller('campaigns')
 export class CampaignsController {
@@ -28,7 +33,10 @@ export class CampaignsController {
 
   @Post()
   @UseGuards(AuthGuard('jwt'))
-  create(@Body() createCampaignDto: CreateCampaignDto, @CurrentUser() user: User) {
+  create(
+    @Body() createCampaignDto: CreateCampaignDto,
+    @CurrentUser() user: User,
+  ) {
     return this.campaignsService.create(createCampaignDto, user);
   }
 
@@ -44,10 +52,9 @@ export class CampaignsController {
     return this.campaignsService.processUpload([file], UploadType.DATA_SOURCE);
   }
 
-
   @Get()
-  findAll() {
-    return this.campaignsService.findAll();
+  findAll(@Query() pagination: CursorPaginationDto): Promise<CursorPaginationResponse<Campaign>> {
+    return this.campaignsService.findAll(pagination);
   }
 
   @Get(':id')
@@ -85,7 +92,8 @@ export class CampaignsController {
   @UseGuards(AuthGuard('jwt'))
   @ApiOperation({
     summary: 'Send Campaign',
-    description: 'Render mail-merge variables and enqueue all recipients to Gmail send queue. Returns immediately.',
+    description:
+      'Render mail-merge variables and enqueue all recipients to Gmail send queue. Returns immediately.',
   })
   sendCampaign(
     @Param('id') id: string,
@@ -99,12 +107,10 @@ export class CampaignsController {
   @UseGuards(AuthGuard('jwt'))
   @ApiOperation({
     summary: 'Resume Campaign',
-    description: 'Resumes a paused campaign, re-enqueuing failed/pending recipients.',
+    description:
+      'Resumes a paused campaign, re-enqueuing failed/pending recipients.',
   })
-  resumeCampaign(
-    @Param('id') id: string,
-    @CurrentUser() user: User,
-  ) {
+  resumeCampaign(@Param('id') id: string, @CurrentUser() user: User) {
     return this.campaignsService.resumeCampaign(id, user);
   }
 
@@ -112,7 +118,8 @@ export class CampaignsController {
   @UseGuards(AuthGuard('jwt'))
   @ApiOperation({
     summary: 'Send Test Campaign',
-    description: 'Sends a test email to the specified address using the first recipient\'s data.',
+    description:
+      "Sends a test email to the specified address using the first recipient's data.",
   })
   sendTestCampaign(
     @Param('id') id: string,

@@ -1,4 +1,4 @@
 export enum UploadType {
-    ATTACHMENT = 'attachment',
-    DATA_SOURCE = 'data-source'
+  ATTACHMENT = 'attachment',
+  DATA_SOURCE = 'data-source',
 }

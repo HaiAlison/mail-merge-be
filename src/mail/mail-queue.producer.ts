@@ -1,7 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { MAIL_QUEUE, SEND_EMAIL_JOB, SendEmailJobPayload } from './mail-queue.types';
+import {
+  MAIL_QUEUE,
+  SEND_EMAIL_JOB,
+  SendEmailJobPayload,
+} from './mail-queue.types';
 
 @Injectable()
 export class MailQueueProducer {
@@ -26,7 +30,7 @@ export class MailQueueProducer {
       : 0;
 
     const job = await this.mailQueue.add(SEND_EMAIL_JOB, payload, {
-      jobId: payload.idempotencyKey,  // prevents duplicate sends
+      jobId: payload.idempotencyKey, // prevents duplicate sends
       delay,
       attempts: 3,
       backoff: {
@@ -41,7 +45,7 @@ export class MailQueueProducer {
       `Enqueued email job ${job.id} for ${payload.to.join(',')}${delay ? ` (delayed ${delay}ms)` : ''}`,
     );
 
-    return job.id!;
+    return job.id;
   }
 
   /**
@@ -71,6 +75,6 @@ export class MailQueueProducer {
     );
 
     this.logger.log(`Enqueued ${jobs.length} email jobs for campaign`);
-    return jobs.map((j) => j.id!);
+    return jobs.map((j) => j.id);
   }
 }

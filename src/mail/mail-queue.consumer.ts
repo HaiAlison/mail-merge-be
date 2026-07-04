@@ -40,7 +40,9 @@ export class MailQueueConsumer extends WorkerHost {
     // 2. Get OAuth2 client with valid token
     let oauth2Client;
     try {
-      oauth2Client = await this.gmailAuthService.getOAuth2Client(payload.userId);
+      oauth2Client = await this.gmailAuthService.getOAuth2Client(
+        payload.userId,
+      );
     } catch (error) {
       if (error instanceof UnauthorizedException) {
         this.notificationsGateway.sendToUser(payload.userId, 'campaign_error', {
@@ -49,7 +51,9 @@ export class MailQueueConsumer extends WorkerHost {
         });
 
         if (payload.campaignId) {
-          this.eventEmitter.emit('campaign.pause', { campaignId: payload.campaignId });
+          this.eventEmitter.emit('campaign.pause', {
+            campaignId: payload.campaignId,
+          });
         }
         throw new UnrecoverableError(error.message);
       }
@@ -73,7 +77,7 @@ export class MailQueueConsumer extends WorkerHost {
       requestBody: { raw },
     });
 
-    const gmailMessageId = response.data.id!;
+    const gmailMessageId = response.data.id;
     const now = new Date();
 
     // 5. Update email log → SENT
@@ -85,7 +89,9 @@ export class MailQueueConsumer extends WorkerHost {
     // 6. Emit email.sent event
     this.eventEmitter.emit('email.sent', { payload, gmailMessageId });
 
-    this.logger.log(`✅ Email ${job.id} sent — gmailMessageId=${gmailMessageId}`);
+    this.logger.log(
+      `✅ Email ${job.id} sent — gmailMessageId=${gmailMessageId}`,
+    );
   }
 
   @OnWorkerEvent('failed')
@@ -101,7 +107,10 @@ export class MailQueueConsumer extends WorkerHost {
       // Max retries reached → mark as FAILED
       await this.emailLogRepository.update(payload.emailLogId, {
         status: 'failed',
-        metadata: { error: error.message, failedAt: new Date().toISOString() } as any,
+        metadata: {
+          error: error.message,
+          failedAt: new Date().toISOString(),
+        } as any,
       });
 
       this.eventEmitter.emit('email.failed', { payload, error });

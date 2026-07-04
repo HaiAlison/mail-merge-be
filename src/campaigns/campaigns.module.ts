@@ -41,5 +41,4 @@ import { FileParserService } from './file-parser.service';
   ],
   exports: [CampaignsService],
 })
-export class CampaignsModule { }
-
+export class CampaignsModule {}
