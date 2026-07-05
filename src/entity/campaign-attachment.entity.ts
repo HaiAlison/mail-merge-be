@@ -8,9 +8,10 @@ import {
   Index,
 } from 'typeorm';
 import { Campaign } from './campaign.entity';
+import { BaseTimeStampEntity } from 'src/utils/config/database/base-entity';
 
 @Entity('campaign_attachments')
-export class CampaignAttachment {
+export class CampaignAttachment extends BaseTimeStampEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
@@ -36,6 +37,4 @@ export class CampaignAttachment {
   @Column({ name: 'mime_type', type: 'varchar', length: 100, nullable: true })
   mimeType: string | null;
 
-  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
-  createdAt: Date;
 }

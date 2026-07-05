@@ -194,7 +194,9 @@ export class CampaignsService {
   }
 
   async findAll(pagination: CursorPaginationDto): Promise<CursorPaginationResponse<Campaign>> {
-    const queryBuilder = this.campaignRepository.createQueryBuilder('campaign');
+    const queryBuilder = this.campaignRepository.createQueryBuilder('campaign')
+      .addSelect('campaign.createdAt')
+      .addSelect('campaign.updatedAt');
     return await cursorPagination(queryBuilder, pagination)
   }
 

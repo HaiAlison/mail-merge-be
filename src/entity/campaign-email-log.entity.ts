@@ -8,9 +8,10 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Campaign } from './campaign.entity';
+import { BaseTimeStampEntity } from 'src/utils/config/database/base-entity';
 
 @Entity('campaign_email_logs')
-export class CampaignEmailLog {
+export class CampaignEmailLog extends BaseTimeStampEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 

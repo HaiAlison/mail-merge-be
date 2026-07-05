@@ -13,12 +13,12 @@ export class BaseTimeStampEntity extends BaseEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @CreateDateColumn({ type: 'timestamptz', select: false })
-  created_at: Date;
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz', select: false })
+  createdAt: Date;
 
-  @UpdateDateColumn({ type: 'timestamptz', nullable: true, select: false })
-  updated_at: Date;
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz', nullable: true, select: false })
+  updatedAt: Date;
 
-  @DeleteDateColumn({ type: 'timestamptz', nullable: true, select: false })
-  deleted_at: Date;
+  @DeleteDateColumn({ name: 'deleted_at', type: 'timestamptz', nullable: true, select: false })
+  deletedAt: Date;
 }

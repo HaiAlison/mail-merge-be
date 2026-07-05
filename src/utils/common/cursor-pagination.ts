@@ -1,7 +1,7 @@
 import { Repository, SelectQueryBuilder } from 'typeorm';
 
 export interface CursorPayload {
-  created_at: string | Date;
+  createdAt: string | Date;
   id: string;
 }
 
@@ -62,11 +62,11 @@ export const cursorPagination = async <T>(
   // Apply Cursor condition
   if (cursor) {
     const decoded = decodeCursor(cursor);
-    if (decoded && decoded.created_at && decoded.id) {
+    if (decoded && decoded.createdAt && decoded.id) {
       const operator = orderDirection === 'DESC' ? '<' : '>';
       qb.andWhere(
         `(${alias}.created_at ${operator} :cursorCreatedAt OR (${alias}.created_at = :cursorCreatedAt AND ${alias}.id ${operator} :cursorId))`,
-        { cursorCreatedAt: decoded.created_at, cursorId: decoded.id }
+        { cursorCreatedAt: decoded.createdAt, cursorId: decoded.id }
       );
     }
   }
@@ -87,14 +87,15 @@ export const cursorPagination = async <T>(
 
   if (results.length > 0 && hasMore) {
     const lastItem = results[results.length - 1] as any;
-    if (lastItem.created_at && lastItem.id) {
+    console.log(lastItem)
+    if (lastItem.createdAt && lastItem.id) {
       nextCursor = encodeCursor({
-        created_at: lastItem.created_at,
+        createdAt: lastItem.createdAt,
         id: lastItem.id,
       });
     }
   }
-
+  console.log(hasMore, nextCursor)
   return {
     data: results,
     nextCursor,

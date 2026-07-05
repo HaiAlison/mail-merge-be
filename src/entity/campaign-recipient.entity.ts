@@ -9,9 +9,10 @@ import {
 } from 'typeorm';
 import { Campaign } from './campaign.entity';
 import { RecipientStatus } from './enums';
+import { BaseTimeStampEntity } from 'src/utils/config/database/base-entity';
 
 @Entity('campaign_recipients')
-export class CampaignRecipient {
+export class CampaignRecipient extends BaseTimeStampEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
@@ -45,6 +46,4 @@ export class CampaignRecipient {
   @Column({ name: 'error_message', type: 'text', nullable: true })
   errorMessage: string | null;
 
-  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
-  createdAt: Date;
 }

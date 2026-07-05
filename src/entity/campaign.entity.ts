@@ -14,8 +14,10 @@ import { CampaignDataSource } from './campaign-data-source.entity';
 import { CampaignEmailLog } from './campaign-email-log.entity';
 import { CampaignRecipient } from './campaign-recipient.entity';
 import { CampaignStatus, ParseStatus } from './enums';
+import { BaseTimeStampEntity } from 'src/utils/config/database/base-entity';
 @Entity('campaigns')
-export class Campaign {
+@Index('cursor_index_campaigns', ['createdAt', 'id'], { unique: true })
+export class Campaign extends BaseTimeStampEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
@@ -71,12 +73,6 @@ export class Campaign {
 
   @Column({ name: 'sent_at', type: 'timestamptz', nullable: true })
   sentAt?: Date | null;
-
-  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
-  createdAt: Date;
-
-  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
-  updatedAt: Date;
 
   @OneToMany(() => CampaignRecipient, (recipient) => recipient.campaign)
   recipients: CampaignRecipient[];
