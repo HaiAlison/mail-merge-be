@@ -449,7 +449,6 @@ export class CampaignsService {
       throw new NotFoundException(`Campaign ${campaignId} not found`);
     }
 
-    console.log(campaign.userId, user.id);
     if (campaign.userId !== user.id) {
       throw new BadRequestException('You do not own this campaign');
     }

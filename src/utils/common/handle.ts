@@ -38,8 +38,8 @@ export const handleError = (e) => {
   if (new RegExp('violates not-null constraint').test(e.message)) {
     throw new HttpException(
       'column ' +
-        e.message.match(/".*"/)[0]?.replace(/"/g, '') +
-        ' can not be null',
+      e.message.match(/".*"/)[0]?.replace(/"/g, '') +
+      ' can not be null',
       HttpStatus.BAD_REQUEST,
       {
         cause: new Error(
@@ -157,7 +157,6 @@ export const parseTextToArray = (text, toNumber = false) => {
       }
     }
   }
-  console.log(result);
   return result;
 };
 
@@ -183,9 +182,9 @@ export const callAxios = async (
 
 export const cleanObject = (originalObject = {}) => {
   const validArrays = pickBy(
-      originalObject,
-      (e) => Array.isArray(e) && e.length > 0,
-    ),
+    originalObject,
+    (e) => Array.isArray(e) && e.length > 0,
+  ),
     validObjects = pickBy(
       originalObject,
       (e) =>
@@ -227,7 +226,7 @@ export const generateCodeBaseOnSequence = async (
     if (
       sequence_code.code &&
       Number(sequence_code.code.match(/\d+/g).join('')) <=
-        Number(max_code.code?.match(/\d+/g).join(''))
+      Number(max_code.code?.match(/\d+/g).join(''))
     ) {
       await transaction.query(
         `select max(code) as code from public.${table_name} where code ilike $1`,
@@ -237,7 +236,6 @@ export const generateCodeBaseOnSequence = async (
       code = sequence_code.code;
     }
   } while (!code);
-  console.log(code);
   return code;
 };
 

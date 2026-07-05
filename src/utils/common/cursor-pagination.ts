@@ -87,7 +87,6 @@ export const cursorPagination = async <T>(
 
   if (results.length > 0 && hasMore) {
     const lastItem = results[results.length - 1] as any;
-    console.log(lastItem)
     if (lastItem.createdAt && lastItem.id) {
       nextCursor = encodeCursor({
         createdAt: lastItem.createdAt,
@@ -95,7 +94,6 @@ export const cursorPagination = async <T>(
       });
     }
   }
-  console.log(hasMore, nextCursor)
   return {
     data: results,
     nextCursor,

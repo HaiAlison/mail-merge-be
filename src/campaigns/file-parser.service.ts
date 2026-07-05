@@ -187,7 +187,6 @@ export class FileParserService {
           if (typeof cell.value == 'object' && 'text' in cell.value) {
             val = String(cell.value.text ?? '').trim();
           }
-          console.log(val);
           parsed[header] = val;
         }
       });
@@ -210,7 +209,7 @@ export class FileParserService {
   private isXlsx(mimeType: string): boolean {
     return (
       mimeType ===
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
       mimeType === 'application/vnd.ms-excel'
     );
   }
