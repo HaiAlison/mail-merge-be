@@ -3,13 +3,13 @@ import { Logger, UnauthorizedException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Job, UnrecoverableError } from 'bullmq';
-import { google } from 'googleapis';
 import { Repository } from 'typeorm';
 import { CampaignEmailLog } from '../entity/campaign-email-log.entity';
 import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { GmailAuthService } from './gmail-auth.service';
 import { MAIL_QUEUE, SendEmailJobPayload } from './mail-queue.types';
 import { MailService } from './mail.service';
+import { gmail } from '@googleapis/gmail';
 
 @Processor(MAIL_QUEUE, {
   concurrency: 5, // process 5 emails in parallel per worker
@@ -71,8 +71,8 @@ export class MailQueueConsumer extends WorkerHost {
     });
 
     // 4. Send via Gmail API
-    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
-    const response = await gmail.users.messages.send({
+    const mail = gmail({ version: 'v1', auth: oauth2Client });
+    const response = await mail.users.messages.send({
       userId: 'me',
       requestBody: { raw },
     });
