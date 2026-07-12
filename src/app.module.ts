@@ -12,6 +12,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { NotificationsModule } from './notifications/notifications.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { SignaturesModule } from './signatures/signatures.module';
 
 @Module({
   imports: [
@@ -36,8 +37,9 @@ import { DashboardModule } from './dashboard/dashboard.module';
     MailModule,
     NotificationsModule,
     DashboardModule,
+    SignaturesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }

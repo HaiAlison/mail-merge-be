@@ -4,6 +4,7 @@ import { AsIntDefaultValue } from './common.decorator';
 import { DEFAULT_LIMIT_NUMBER, DEFAULT_PAGE_NUMBER } from './constant';
 import { Expose, Transform, Type } from 'class-transformer';
 import { removeUnicode } from './handle';
+import { OrderDirection } from './cursor-pagination';
 
 export class CommonDto {
   @ApiPropertyOptional({ default: DEFAULT_PAGE_NUMBER })
@@ -72,4 +73,16 @@ export class CursorPaginationDto {
     required: false,
   })
   cursor?: string;
+
+  @Expose()
+  @ApiPropertyOptional({
+    description: 'Order direction',
+    enum: OrderDirection,
+    default: OrderDirection.DESC,
+  })
+  @Transform(({ value }) => {
+    if (!value) return value;
+    return value.toUpperCase() === OrderDirection.ASC ? OrderDirection.ASC : OrderDirection.DESC;
+  })
+  orderDirection?: OrderDirection = OrderDirection.DESC;
 }

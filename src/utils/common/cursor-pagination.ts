@@ -6,7 +6,7 @@ export interface CursorPayload {
 }
 
 export interface CursorPaginationResponse<T> {
-  data: T[];
+  results: T[];
   nextCursor: string | null;
   limit: number;
   hasMore: boolean;
@@ -23,20 +23,23 @@ export function decodeCursor(cursor: string): CursorPayload | null {
     return null;
   }
 }
-
+export enum OrderDirection {
+  ASC = 'ASC',
+  DESC = 'DESC',
+}
 export const cursorPagination = async <T>(
   query: SelectQueryBuilder<T> | Repository<T>,
   options: {
     limit?: number;
     cursor?: string;
     alias?: string;
-    orderDirection?: 'ASC' | 'DESC';
+    orderDirection?: OrderDirection;
   },
   findManyWhere?: any
 ): Promise<CursorPaginationResponse<T>> => {
   const limit = options.limit || 10;
   const cursor = options.cursor;
-  const orderDirection = options.orderDirection || 'DESC';
+  const orderDirection = options.orderDirection || OrderDirection.DESC;
   let results: T[] = [];
 
   let qb: SelectQueryBuilder<T>;
@@ -63,7 +66,7 @@ export const cursorPagination = async <T>(
   if (cursor) {
     const decoded = decodeCursor(cursor);
     if (decoded && decoded.createdAt && decoded.id) {
-      const operator = orderDirection === 'DESC' ? '<' : '>';
+      const operator = orderDirection === OrderDirection.DESC ? '<' : '>';
       qb.andWhere(
         `(${alias}.created_at ${operator} :cursorCreatedAt OR (${alias}.created_at = :cursorCreatedAt AND ${alias}.id ${operator} :cursorId))`,
         { cursorCreatedAt: decoded.createdAt, cursorId: decoded.id }
@@ -95,7 +98,7 @@ export const cursorPagination = async <T>(
     }
   }
   return {
-    data: results,
+    results,
     nextCursor,
     limit,
     hasMore,

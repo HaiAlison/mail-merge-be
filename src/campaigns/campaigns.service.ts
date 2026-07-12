@@ -4,7 +4,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { google } from 'googleapis';
 import 'multer';
 import { CampaignDataSource } from 'src/entity/campaign-data-source.entity';
 import { GmailAuthService } from 'src/mail/gmail-auth.service';
@@ -28,6 +27,7 @@ import { FileParserService } from './file-parser.service';
 import { UpdateCampaignDto } from './dto/update-campaign.dto';
 import { CursorPaginationDto } from 'src/utils/common/dto';
 import { cursorPagination, CursorPaginationResponse } from 'src/utils/common/cursor-pagination';
+import { gmail } from '@googleapis/gmail';
 // Define interface for Multer file since types might be missing
 export interface MulterFile {
   fieldname: string;
@@ -486,14 +486,14 @@ export class CampaignsService {
 
     // 3. Get OAuth2 client
     const oauth2Client = await this.gmailAuthService.getOAuth2Client(user.id);
-    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+    const mail = gmail({ version: 'v1', auth: oauth2Client });
 
     // 4. Build raw MIME message
     const raw = this.mailService.buildRawEmail(payload);
 
     // 5. Send directly via Gmail API
     try {
-      const response = await gmail.users.messages.send({
+      const response = await mail.users.messages.send({
         userId: 'me',
         requestBody: { raw },
       });

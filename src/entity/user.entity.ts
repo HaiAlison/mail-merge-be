@@ -28,10 +28,11 @@ export class User extends BaseTimeStampEntity {
     type: 'text',
     nullable: true,
     transformer: encryptionTransformer,
+    select: false
   })
   googleRefreshToken: string | null;
 
   /** Hashed password for email/password auth (null for Google-only accounts) */
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: 'text', nullable: true, select: false })
   password: string | null;
 }
