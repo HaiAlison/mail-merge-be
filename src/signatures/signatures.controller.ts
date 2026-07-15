@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { SignaturesService } from './signatures.service';
 import { CreateSignatureDto } from './dto/signature.dto';
 import { AuthGuard } from '@nestjs/passport';
@@ -6,6 +6,7 @@ import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { User } from 'src/entity/user.entity';
 import { CursorPaginationDto } from 'src/utils/common/dto';
 import { UpdateSignatureDto } from './dto/update-signature.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @Controller('signatures')
 export class SignaturesController {
@@ -20,6 +21,22 @@ export class SignaturesController {
     return this.signaturesService.createSignature(user.id, createSignatureDto);
   }
 
+  @Post('attachment')
+  @UseGuards(AuthGuard('jwt'))
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadSignatureAttachment(
+    @UploadedFile() file,
+    @CurrentUser() user: User
+  ) {
+    return this.signaturesService.uploadSignatureAttachment(file, user.id);
+  }
+
+
+  @Post('sync')
+  @UseGuards(AuthGuard('jwt'))
+  async syncSignature(@CurrentUser() user: User) {
+    return this.signaturesService.syncSignature(user);
+  }
   @Patch(':id')
   @UseGuards(AuthGuard('jwt'))
   async updateSignature(

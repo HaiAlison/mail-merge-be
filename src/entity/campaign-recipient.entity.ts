@@ -6,12 +6,14 @@ import {
   ManyToOne,
   JoinColumn,
   Index,
+  Unique,
 } from 'typeorm';
 import { Campaign } from './campaign.entity';
 import { RecipientStatus } from './enums';
 import { BaseTimeStampEntity } from 'src/utils/config/database/base-entity';
 
 @Entity('campaign_recipients')
+@Unique('campaign_recipient_email_unique', ['campaignId', 'email'])
 export class CampaignRecipient extends BaseTimeStampEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;

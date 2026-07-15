@@ -46,6 +46,11 @@ export class CreateCampaignDto {
   @IsUUID('all', { each: true })
   attachmentIds?: string[];
 
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsUUID()
+  signatureId?: string;
+
   @IsNotEmpty()
   @IsEnum(CampaignStatus)
   status: CampaignStatus;

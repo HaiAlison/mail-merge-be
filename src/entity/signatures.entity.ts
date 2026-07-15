@@ -1,6 +1,7 @@
 import { BaseTimeStampEntity } from "src/utils/config/database/base-entity";
-import { Column, Entity, OneToMany } from "typeorm";
+import { Column, Entity, OneToMany, OneToOne } from "typeorm";
 import { SignatureAttachment } from "./signature-attachment.entity";
+import { Campaign } from "./campaign.entity";
 
 @Entity('signatures')
 export class Signature extends BaseTimeStampEntity {
@@ -18,4 +19,7 @@ export class Signature extends BaseTimeStampEntity {
 
     @Column({ name: 'is_default', type: 'boolean', default: false })
     isDefault: boolean;
+
+    @OneToOne(() => Campaign, (campaign) => campaign.dataSource)
+    campaign: Campaign;
 }

@@ -81,10 +81,16 @@ export class MailQueueConsumer extends WorkerHost {
     const now = new Date();
 
     // 5. Update email log → SENT
-    await this.emailLogRepository.update(payload.emailLogId, {
-      status: 'sent',
-      metadata: { gmailMessageId, sentAt: now.toISOString() } as any,
-    });
+    await this.emailLogRepository
+      .createQueryBuilder()
+      .update(CampaignEmailLog)
+      .set({
+        status: 'sent',
+        metadata: () => "COALESCE(metadata, '{}'::jsonb) || :newMetadata::jsonb",
+      })
+      .setParameter('newMetadata', JSON.stringify({ gmailMessageId, sentAt: now.toISOString() }))
+      .where('id = :id', { id: payload.emailLogId })
+      .execute();
 
     // 6. Emit email.sent event
     this.eventEmitter.emit('email.sent', { payload, gmailMessageId });
@@ -105,13 +111,19 @@ export class MailQueueConsumer extends WorkerHost {
 
     if (isLastAttempt) {
       // Max retries reached → mark as FAILED
-      await this.emailLogRepository.update(payload.emailLogId, {
-        status: 'failed',
-        metadata: {
+      await this.emailLogRepository
+        .createQueryBuilder()
+        .update(CampaignEmailLog)
+        .set({
+          status: 'failed',
+          metadata: () => "COALESCE(metadata, '{}'::jsonb) || :newMetadata::jsonb",
+        })
+        .setParameter('newMetadata', JSON.stringify({
           error: error.message,
           failedAt: new Date().toISOString(),
-        } as any,
-      });
+        }))
+        .where('id = :id', { id: payload.emailLogId })
+        .execute();
 
       this.eventEmitter.emit('email.failed', { payload, error });
     }

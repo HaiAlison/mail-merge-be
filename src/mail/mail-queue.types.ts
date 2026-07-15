@@ -1,3 +1,5 @@
+import { CampaignStatus } from "src/entity/enums";
+
 export const MAIL_QUEUE = 'mail-queue';
 export const SEND_EMAIL_JOB = 'send-email';
 
@@ -24,6 +26,9 @@ export interface SendEmailJobPayload {
   headers?: Record<string, string>;
   /** Idempotency: campaignId_recipientId hoặc uuid */
   idempotencyKey: string;
+  /** Loại campaign */
+  campaignStatus: CampaignStatus;
+  campaignName: string;
 }
 
 export interface EmailSentEvent {

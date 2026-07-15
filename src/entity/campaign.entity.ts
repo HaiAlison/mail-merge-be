@@ -4,6 +4,7 @@ import {
   Entity,
   Index,
   JoinColumn,
+  ManyToOne,
   OneToMany,
   OneToOne,
   PrimaryGeneratedColumn,
@@ -15,6 +16,7 @@ import { CampaignEmailLog } from './campaign-email-log.entity';
 import { CampaignRecipient } from './campaign-recipient.entity';
 import { CampaignStatus, ParseStatus } from './enums';
 import { BaseTimeStampEntity } from 'src/utils/config/database/base-entity';
+import { Signature } from './signatures.entity';
 @Entity('campaigns')
 @Index('cursor_index_campaigns', ['createdAt', 'id'], { unique: true })
 export class Campaign extends BaseTimeStampEntity {
@@ -88,6 +90,15 @@ export class Campaign extends BaseTimeStampEntity {
   })
   @JoinColumn({ name: 'data_source_id' })
   dataSource: CampaignDataSource;
+
+  @Column({ name: 'signature_id', type: 'uuid', nullable: true })
+  signatureId: string;
+
+  @ManyToOne(() => Signature, (signature) => signature.campaign, {
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ name: 'signature_id' })
+  signature: Signature;
 
   @OneToMany(() => CampaignEmailLog, (log) => log.campaign)
   emailLogs: CampaignEmailLog[];

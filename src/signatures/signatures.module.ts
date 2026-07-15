@@ -4,9 +4,11 @@ import { SignaturesController } from './signatures.controller';
 import { Signature } from 'src/entity/signatures.entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { SignatureAttachment } from 'src/entity/signature-attachment.entity';
+import { MailModule } from 'src/mail/mail.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Signature, SignatureAttachment])],
+  imports: [TypeOrmModule.forFeature([Signature, SignatureAttachment]), MailModule
+  ],
   controllers: [SignaturesController],
   providers: [SignaturesService],
 })

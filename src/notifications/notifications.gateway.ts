@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import {
   OnGatewayConnection,
   OnGatewayDisconnect,
@@ -13,23 +14,30 @@ import { Server, Socket } from 'socket.io';
   },
 })
 export class NotificationsGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
-{
+  implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(NotificationsGateway.name);
 
   @WebSocketServer()
   server: Server;
 
+  constructor(private readonly jwtService: JwtService) {}
+
   handleConnection(client: Socket) {
-    const userId = client.handshake.query.userId as string;
-    if (userId) {
-      // Join a room unique to this user
-      client.join(`user_${userId}`);
-      this.logger.log(
-        `Client connected: ${client.id} - Joined room: user_${userId}`,
-      );
-    } else {
-      this.logger.warn(`Client connected without userId: ${client.id}`);
+    const token = client.handshake.auth.token;
+    try {
+      const verify = this.jwtService.verify(token);
+      const userId = verify.sub;
+      if (userId) {
+        // Join a room unique to this user
+        client.join(`user_${userId}`);
+        this.logger.log(
+          `Client connected: ${client.id} - Joined room: user_${userId}`,
+        );
+      } else {
+        this.logger.warn(`Client connected without userId: ${client.id}`);
+      }
+    } catch (err) {
+      this.logger.error(`Error verifying token: ${client.id}`, err);
     }
   }
 

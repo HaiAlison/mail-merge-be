@@ -28,6 +28,7 @@ import { UpdateCampaignDto } from './dto/update-campaign.dto';
 import { CursorPaginationDto } from 'src/utils/common/dto';
 import { cursorPagination, CursorPaginationResponse } from 'src/utils/common/cursor-pagination';
 import { gmail } from '@googleapis/gmail';
+import { include } from 'src/utils/config/database/hidden-cols-model';
 // Define interface for Multer file since types might be missing
 export interface MulterFile {
   fieldname: string;
@@ -60,7 +61,7 @@ export class CampaignsService {
     private readonly gmailAuthService: GmailAuthService,
     private readonly fileParserService: FileParserService,
     private readonly campaignQueueProducer: CampaignQueueProducer,
-  ) { }
+  ) {}
 
   async create(createCampaignDto: CreateCampaignDto, user: User) {
     const {
@@ -72,6 +73,7 @@ export class CampaignsService {
       name,
       status,
       dataSourceId,
+      signatureId,
     } = createCampaignDto;
 
     const campaign = this.campaignRepository.create({
@@ -83,6 +85,7 @@ export class CampaignsService {
       status,
       placeholders: placeholders,
       placeholdersMap: placeholdersMap || {},
+      signatureId,
     });
     const savedCampaign = await this.campaignRepository.save(campaign);
 
@@ -203,7 +206,8 @@ export class CampaignsService {
   async findOne(id: string) {
     const campaign = await this.campaignRepository.findOne({
       where: { id },
-      relations: ['recipients', 'attachments', 'dataSource', 'emailLogs'],
+      relations: ['recipients', 'attachments', 'dataSource', 'emailLogs', 'signature'],
+      select: include(this.campaignRepository, ['createdAt', 'updatedAt'])
     });
     if (!campaign) {
       throw new NotFoundException(`Campaign with ID "${id}" not found`);
@@ -283,7 +287,7 @@ export class CampaignsService {
   ) {
     const campaign = await this.campaignRepository.findOne({
       where: { id: campaignId },
-      relations: ['recipients'],
+      relations: ['recipients', 'signature'],
     });
 
     if (!campaign) {
@@ -318,7 +322,7 @@ export class CampaignsService {
       recipients.map((r) => ({
         campaignId,
         recipientId: r.id,
-        status: scheduledAt ? 'scheduled' : 'queued',
+        status: scheduledAt ? CampaignStatus.SCHEDULED : CampaignStatus.SENDING,
         metadata: {
           from,
           to: [r.email],
@@ -327,6 +331,10 @@ export class CampaignsService {
       })),
     );
     const savedLogs = await this.emailLogRepository.save(logs);
+
+    const signatureContent = campaign.signature?.content
+      ? `<br/>--<br/>${campaign.signature.content}`
+      : '';
 
     // 2. Render mail-merge variables and build job payloads
     const payloads = recipients.map((recipient, i) => ({
@@ -337,8 +345,10 @@ export class CampaignsService {
       from,
       to: [recipient.email],
       subject: renderTemplate(campaign.subject, recipient.data),
-      html: renderTemplate(campaign.content, recipient.data),
+      html: renderTemplate(campaign.content, recipient.data) + signatureContent,
       idempotencyKey: `${campaignId}_${recipient.id}`,
+      campaignStatus: scheduledAt ? CampaignStatus.SCHEDULED : CampaignStatus.SENDING,
+      campaignName: campaign.name,
     }));
 
     // 3. Enqueue batch
@@ -347,7 +357,7 @@ export class CampaignsService {
     // 4. Update campaign status
     await this.campaignRepository.update(campaignId, {
       status: scheduledAt ? CampaignStatus.SCHEDULED : CampaignStatus.SENDING,
-      ...(scheduledAt ? { scheduledAt } : {}),
+      ...(scheduledAt ? { scheduledAt, schedulingCount: recipients.length } : {}),
     });
 
     return {
@@ -360,7 +370,7 @@ export class CampaignsService {
   async resumeCampaign(campaignId: string, user: User) {
     const campaign = await this.campaignRepository.findOne({
       where: { id: campaignId },
-      relations: ['recipients'],
+      relations: ['recipients', 'signature'],
     });
 
     if (!campaign) {
@@ -401,7 +411,7 @@ export class CampaignsService {
       pendingRecipients.map((r) => ({
         campaignId,
         recipientId: r.id,
-        status: 'queued',
+        status: CampaignStatus.SENDING,
         metadata: {
           from,
           to: [r.email],
@@ -412,6 +422,10 @@ export class CampaignsService {
     );
     const savedLogs = await this.emailLogRepository.save(logs);
 
+    const signatureContent = campaign.signature?.content
+      ? `<br/>--<br/>${campaign.signature.content}`
+      : '';
+
     // 2. Render mail-merge variables and build job payloads
     const payloads = pendingRecipients.map((recipient, i) => ({
       emailLogId: savedLogs[i].id,
@@ -421,8 +435,10 @@ export class CampaignsService {
       from,
       to: [recipient.email],
       subject: renderTemplate(campaign.subject, recipient.data),
-      html: renderTemplate(campaign.content, recipient.data),
+      html: renderTemplate(campaign.content, recipient.data) + signatureContent,
       idempotencyKey: `${campaignId}_resume_${recipient.id}_${savedLogs[i].id}`,
+      campaignStatus: campaign.status,
+      campaignName: campaign.name,
     }));
 
     // 3. Enqueue batch
@@ -442,7 +458,7 @@ export class CampaignsService {
   async sendTestCampaign(campaignId: string, user: User, testEmail: string) {
     const campaign = await this.campaignRepository.findOne({
       where: { id: campaignId },
-      relations: ['recipients'],
+      relations: ['recipients', 'signature'],
     });
 
     if (!campaign) {
@@ -471,6 +487,10 @@ export class CampaignsService {
     });
     const savedLog = await this.emailLogRepository.save(log);
 
+    const signatureContent = campaign.signature?.content
+      ? `<br/>--<br/>${campaign.signature.content}`
+      : '';
+
     // 2. Render mail-merge variables and build job payload
     const payload = {
       emailLogId: savedLog.id,
@@ -479,7 +499,7 @@ export class CampaignsService {
       from,
       to: [testEmail],
       subject: renderTemplate(campaign.subject, dummyData),
-      html: renderTemplate(campaign.content, dummyData),
+      html: renderTemplate(campaign.content, dummyData) + signatureContent,
       idempotencyKey: `${campaignId}_test_${savedLog.id}`,
       isTest: true,
     };

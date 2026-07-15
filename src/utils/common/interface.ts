@@ -28,5 +28,13 @@ export interface PushFileOnCloud {
   dir: string;
   data: Buffer;
   file_name: string;
+  isAttachment?: boolean;
   i18n?: I18nContext;
+}
+
+export interface IPushFileOnCloudResponse {
+  fileName: string;
+  filePath: string;
+  mimeType: string;
+  ext: string;
 }

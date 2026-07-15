@@ -29,7 +29,7 @@ import { Campaign } from 'src/entity/campaign.entity';
 
 @Controller('campaigns')
 export class CampaignsController {
-  constructor(private readonly campaignsService: CampaignsService) { }
+  constructor(private readonly campaignsService: CampaignsService) {}
 
   @Post()
   @UseGuards(AuthGuard('jwt'))
@@ -113,7 +113,6 @@ export class CampaignsController {
   resumeCampaign(@Param('id') id: string, @CurrentUser() user: User) {
     return this.campaignsService.resumeCampaign(id, user);
   }
-
   @Post(':id/test')
   @UseGuards(AuthGuard('jwt'))
   @ApiOperation({
