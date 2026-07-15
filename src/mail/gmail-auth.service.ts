@@ -1,7 +1,7 @@
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { OAuth2Client } from 'google-auth-library';
 import { User } from '../entity/user.entity';
 
@@ -20,7 +20,7 @@ export class GmailAuthService {
    * Refreshes the token automatically if expired or missing.
    */
   async getOAuth2Client(userId: string): Promise<OAuth2Client> {
-    const user = await this.userRepository.findOne({ where: { id: userId } });
+    const user = await this.userRepository.findOne({ where: { id: userId }, select: ["googleRefreshToken"] });
 
     if (!user) {
       throw new UnauthorizedException(`User ${userId} not found`);

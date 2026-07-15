@@ -13,7 +13,7 @@ export class BaseTimeStampEntity extends BaseEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @CreateDateColumn({ name: 'created_at', type: 'timestamptz', select: false })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz', select: true })
   createdAt: Date;
 
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz', nullable: true, select: false })

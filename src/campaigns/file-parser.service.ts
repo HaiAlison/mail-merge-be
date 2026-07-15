@@ -99,7 +99,11 @@ export class FileParserService {
       row.eachCell((cell, colNumber) => {
         const header = headerMapping[colNumber - 1];
         if (header) {
-          rowData[header] = String(cell.value ?? '').trim();
+          let val = String(cell.value ?? '').trim();
+          if (typeof cell.value == 'object' && 'text' in cell.value) {
+            val = String(cell.value.text ?? '').trim();
+          }
+          rowData[header] = val;
         }
       });
       previewRows.push(rowData);
@@ -209,7 +213,7 @@ export class FileParserService {
   private isXlsx(mimeType: string): boolean {
     return (
       mimeType ===
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
       mimeType === 'application/vnd.ms-excel'
     );
   }

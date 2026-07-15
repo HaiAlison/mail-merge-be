@@ -6,7 +6,8 @@ export class GoogleAuthGuard extends AuthGuard('google') {
   getAuthenticateOptions(context: ExecutionContext) {
     return {
       accessType: 'offline',
-      scope: ['email', 'profile', 'https://www.googleapis.com/auth/gmail.send'],
+      scope: ['email', 'profile', 'https://www.googleapis.com/auth/gmail.send', 'https://www.googleapis.com/auth/gmail.settings.basic'
+      ],
     };
   }
 

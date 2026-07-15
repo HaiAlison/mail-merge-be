@@ -12,7 +12,7 @@ import {
   FILE_TYPES_IMPORT_ALLOWED,
 } from './constant';
 import { FindOptionsWhere } from 'typeorm/find-options/FindOptionsWhere';
-import { PaginationResponse, PushFileOnCloud } from './interface';
+import { IPushFileOnCloudResponse, PaginationResponse, PushFileOnCloud } from './interface';
 import axios, { AxiosError, Method } from 'axios';
 import axiosRetry from 'axios-retry';
 import { pickBy } from 'lodash';
@@ -252,16 +252,17 @@ export const fromToQuery = ({ from, to, tableName, field, query }) => {
   }
 };
 
-export const pushFileOnCloud = async (dto: PushFileOnCloud) => {
+export const pushFileOnCloud = async (dto: PushFileOnCloud): Promise<IPushFileOnCloudResponse> => {
   const { dir, data, file_name } = dto;
   const fileType = await fromBuffer(data);
   const fileExtension = fileType.ext;
   if (!fileExtension) {
     throw new BadRequestException('Định dạng file không hợp lệ');
   }
-  if (!FILE_TYPES_IMPORT_ALLOWED.includes(fileExtension)) {
+  if (!FILE_TYPES_IMPORT_ALLOWED.includes(fileExtension) && !dto.isAttachment) {
     throw new BadRequestException('Định dạng file không được phép');
   }
+  const finalFileName = btoa(file_name.substring(0, file_name.length - fileExtension.length - 1) + new Date().getTime()) + '.' + fileExtension;
   try {
     const s3Configs = {
       endpoint: process.env.S3_ENDPOINT,
@@ -275,7 +276,7 @@ export const pushFileOnCloud = async (dto: PushFileOnCloud) => {
     const s3Client = new S3Client(s3Configs);
     const putObjectCommand = new PutObjectCommand({
       Bucket: process.env.S3_BUCKET_NAME,
-      Key: `${dir}/${file_name}`,
+      Key: `${dir}/${finalFileName}`,
       Body: data,
       ContentType: fileType.mime,
     });
@@ -285,7 +286,12 @@ export const pushFileOnCloud = async (dto: PushFileOnCloud) => {
   }
   console.log('File link: ');
   console.log(
-    `${process.env.S3_ENDPOINT}/${process.env.S3_BUCKET_NAME}/${dir}/${file_name}`,
+    `${process.env.S3_ENDPOINT}/${process.env.S3_BUCKET_NAME}/${dir}/${finalFileName}`,
   );
-  return file_name;
+  return {
+    fileName: finalFileName,
+    filePath: `${process.env.S3_ENDPOINT}/${process.env.S3_BUCKET_NAME}/${dir}/`,
+    mimeType: fileType.mime,
+    ext: fileExtension,
+  };
 };

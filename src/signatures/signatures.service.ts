@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { Signature } from 'src/entity/signatures.entity';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -6,12 +6,21 @@ import { CreateSignatureDto } from './dto/signature.dto';
 import { CursorPaginationDto } from 'src/utils/common/dto';
 import { cursorPagination } from 'src/utils/common/cursor-pagination';
 import { UpdateSignatureDto } from './dto/update-signature.dto';
+import { User } from 'src/entity/user.entity';
+import { GmailAuthService } from 'src/mail/gmail-auth.service';
+import { gmail } from '@googleapis/gmail';
+import { SignatureAttachment } from 'src/entity/signature-attachment.entity';
+import { pushFileOnCloud } from 'src/utils/common/handle';
+import { PushFileOnCloud } from 'src/utils/common/interface';
 
 @Injectable()
 export class SignaturesService {
     constructor(
         @InjectRepository(Signature)
-        private readonly signatureRepository: Repository<Signature>
+        private readonly signatureRepository: Repository<Signature>,
+        @InjectRepository(SignatureAttachment)
+        private readonly signatureAttachmentRepository: Repository<SignatureAttachment>,
+        private readonly gmailAuthService: GmailAuthService,
     ) {}
 
     async createSignature(userId: string, dto: CreateSignatureDto) {
@@ -29,7 +38,16 @@ export class SignaturesService {
                     signature.isDefault = true;
                 }
             }
-            return await manager.save(Signature, signature);
+            const saveSignature = await manager.save(Signature, signature, { reload: true });
+            if (dto.attachmentIds?.length) {
+                manager.createQueryBuilder()
+                    .update(SignatureAttachment)
+                    .set(
+                        { signatureId: saveSignature.id }
+                    ).where('id IN (:...ids)', { ids: dto.attachmentIds })
+                    .execute();
+            }
+            return saveSignature;
         });
     }
 
@@ -55,6 +73,24 @@ export class SignaturesService {
         });
     }
 
+    async uploadSignatureAttachment(file, userId: string) {
+        const pushFileDto: PushFileOnCloud = {
+            data: Buffer.from(file.buffer),
+            dir: 'mail-sig',
+            file_name: file.originalname,
+            isAttachment: true,
+        }
+        const fileUploaded = await pushFileOnCloud(pushFileDto);
+        const attachment = this.signatureAttachmentRepository.create({
+            fileName: fileUploaded.fileName,
+            filePath: fileUploaded.filePath,
+            fileSize: String(file.size),
+            mimeType: fileUploaded.mimeType,
+        });
+        return await this.signatureAttachmentRepository.save(attachment);
+    }
+
+
     async deleteSignature(id: string, userId: string) {
         const result = await this.signatureRepository.delete({ id, userId });
         if (result.affected === 0) {
@@ -76,5 +112,44 @@ export class SignaturesService {
         return this.signatureRepository.findOne({
             where: { id },
         });
+    }
+
+    async syncSignature(user: User) {
+        let oauth2Client;
+        try {
+            oauth2Client = await this.gmailAuthService.getOAuth2Client(
+                user.id,
+            );
+            const mail = gmail({ version: 'v1', auth: oauth2Client });
+            const { data: { sendAs } } = await mail.users.settings.sendAs.list({ userId: 'me' })
+            if (sendAs.length > 0) {
+                for (const item of sendAs) {
+                    if (!item.signature) continue;
+
+                    // 1. Create/Update the signature from Gmail
+                    // const updatedSignature = await this.signatureRepository.manager.transaction(
+                    //     async (manager) => {
+                    //         const repo = manager.getRepository(Signature);
+
+                    //         const baseData = {
+                    //             userId: user.id,
+                    //             email: item.sendAsEmail,
+                    //             name: item.displayName,
+                    //         };
+
+                    //         let result;
+
+                    //     },
+                    // );
+
+                    // 2. Sync uploaded attachments (images in signature)
+                    // await this.syncSignatureAttachments(item.id, user.id, oauth2Client);
+                }
+                return sendAs
+            }
+        } catch (error) {
+            console.log(error)
+            throw new BadRequestException(error)
+        }
     }
 }

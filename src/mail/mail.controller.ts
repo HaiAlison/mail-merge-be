@@ -14,13 +14,14 @@ import {
 } from './dto/send-email.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../entity/user.entity';
+import { NotificationsGateway } from 'src/notifications/notifications.gateway';
 
 @ApiTags('Mail')
 @ApiBearerAuth()
 @UseGuards(AuthGuard('jwt'))
 @Controller('mail')
 export class MailController {
-  constructor(private readonly mailService: MailService) {}
+  constructor(private readonly mailService: MailService, private noti: NotificationsGateway) {}
 
   /**
    * POST /mail/send
@@ -45,6 +46,10 @@ export class MailController {
     return this.mailService.sendEmail(dto, user.id);
   }
 
+  @Get('test-notification')
+  async testNotification(@CurrentUser() user: User) {
+    return this.noti.sendToUser(user.id, 'test', { message: 'This is test notification' });
+  }
   /**
    * GET /mail/:id
    * Retrieve status of a sent email by its log ID.

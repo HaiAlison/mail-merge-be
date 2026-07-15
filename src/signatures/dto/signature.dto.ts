@@ -17,7 +17,7 @@ export class CreateSignatureDto {
     isDefault: boolean;
 
     @ApiPropertyOptional()
-    @IsString()
+    @IsString({ each: true })
     @IsOptional()
     attachmentIds?: string[];
 }

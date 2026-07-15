@@ -15,6 +15,7 @@ import {
   SendEmailResponseDto,
 } from './dto/send-email.dto';
 import { MailQueueProducer } from './mail-queue.producer';
+import { Campaign } from 'src/entity/campaign.entity';
 
 @Injectable()
 export class MailService {
@@ -26,6 +27,8 @@ export class MailService {
     private readonly emailLogRepository: Repository<CampaignEmailLog>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(Campaign)
+    private readonly campaignRepository: Repository<Campaign>,
   ) {}
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -50,7 +53,8 @@ export class MailService {
     if (!dto.html && !dto.text) {
       throw new BadRequestException('Either html or text must be provided');
     }
-
+    const campaign = await this.campaignRepository.findOne({ where: { id: dto.campaignId } });
+    if (!campaign) throw new BadRequestException('Campaign not found');
     // Create initial email log entry
     const log = this.emailLogRepository.create({
       campaignId: dto.campaignId ?? null,
@@ -81,6 +85,8 @@ export class MailService {
         text: dto.text,
         headers: dto.headers,
         idempotencyKey,
+        campaignStatus: campaign.status,
+        campaignName: campaign.name,
       },
       { scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : undefined },
     );
