@@ -37,4 +37,10 @@ export class BuildRawEmailDto {
   @IsObject()
   @IsOptional()
   headers?: Record<string, string>;
+
+  /** Unsubscribe URL — injected into List-Unsubscribe header + email footer */
+  @ApiPropertyOptional({ example: 'https://api.example.com/unsubscribe?token=xxx' })
+  @IsString()
+  @IsOptional()
+  unsubscribeUrl?: string;
 }

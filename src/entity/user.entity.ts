@@ -35,4 +35,10 @@ export class User extends BaseTimeStampEntity {
   /** Hashed password for email/password auth (null for Google-only accounts) */
   @Column({ type: 'text', nullable: true, select: false })
   password: string | null;
+
+  @Column({ name: 'rate_limit_per_minute', type: 'int', default: 30 })
+  rateLimitPerMinute: number;
+
+  @Column({ name: 'daily_limit', type: 'int', default: 500 })
+  dailyLimit: number;
 }

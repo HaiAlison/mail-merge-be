@@ -10,6 +10,7 @@ import { GmailAuthService } from 'src/mail/gmail-auth.service';
 import { MailService } from 'src/mail/mail.service';
 import { UsersService } from 'src/users/users.service';
 import { handleError } from 'src/utils/common/handle';
+import { UnsubscribeService } from 'src/unsubscribe/unsubscribe.service';
 import { Repository } from 'typeorm';
 import { uuid } from 'uuidv4';
 import { CampaignAttachment } from '../entity/campaign-attachment.entity';
@@ -20,7 +21,7 @@ import { CampaignStatus } from '../entity/enums';
 import { User } from '../entity/user.entity';
 import { MailQueueProducer } from '../mail/mail-queue.producer';
 import { CampaignQueueProducer } from './campaign-queue.producer';
-import { UploadType } from './campaign.type';
+import { IPreviewResult, UploadType } from './campaign.type';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { CreateRecipientDto } from './dto/create-recipient.dto';
 import { FileParserService } from './file-parser.service';
@@ -61,6 +62,7 @@ export class CampaignsService {
     private readonly gmailAuthService: GmailAuthService,
     private readonly fileParserService: FileParserService,
     private readonly campaignQueueProducer: CampaignQueueProducer,
+    private readonly unsubscribeService: UnsubscribeService,
   ) {}
 
   async create(createCampaignDto: CreateCampaignDto, user: User) {
@@ -126,9 +128,9 @@ export class CampaignsService {
     return this.findOne(savedCampaign.id);
   }
 
-  async processUpload(files: MulterFile[], type: UploadType) {
+  async processUpload(files: MulterFile[], type: UploadType): Promise<IPreviewResult | string[]> {
     try {
-      const results: { id: string; headers?: string[] }[] = [];
+      const results: (IPreviewResult | { id: string })[] = [];
 
       for (const file of files) {
         const id = uuid();
@@ -164,15 +166,17 @@ export class CampaignsService {
             results.push({
               id,
               headers: preview.headers,
-              previewRows: preview.previewRows,
-            } as any);
+              previewRow: preview.previewRow,
+              // rows: preview.rows,
+              totalRows: preview.totalRows,
+            });
             break;
           }
         }
       }
 
       if (type === UploadType.DATA_SOURCE) {
-        return results[0]; // { id, headers }
+        return results[0] as IPreviewResult;
       }
       return results.map((r) => r.id); // attachment IDs array
     } catch (error) {
@@ -307,9 +311,32 @@ export class CampaignsService {
       );
     }
 
-    const recipients = campaign.recipients ?? [];
-    if (recipients.length === 0) {
+    const allRecipients = campaign.recipients ?? [];
+    if (allRecipients.length === 0) {
       throw new BadRequestException('Campaign has no recipients');
+    }
+
+    // Filter out unsubscribed recipients
+    const allEmails = allRecipients.map((r) => r.email);
+    const activeEmails = await this.unsubscribeService.filterUnsubscribed(user.id, allEmails);
+    const activeEmailSet = new Set(activeEmails);
+    const recipients = allRecipients.filter((r) => activeEmailSet.has(r.email));
+
+    // CHECK DAILY LIMIT
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const sentTodayCount = await this.emailLogRepository
+      .createQueryBuilder('log')
+      .innerJoin('log.campaign', 'campaign')
+      .where('campaign.userId = :userId', { userId: user.id })
+      .andWhere('log.createdAt >= :today', { today })
+      .getCount();
+
+    const dailyLimit = user.dailyLimit ?? 500;
+    if (sentTodayCount + recipients.length > dailyLimit) {
+      throw new BadRequestException(
+        `You have already queued ${sentTodayCount} emails today. Sending this campaign (${recipients.length} recipients) would exceed your daily limit of ${dailyLimit}.`
+      );
     }
 
     const from = `${user.firstName ?? 'Sender'} <${user.email}>`;
@@ -317,7 +344,7 @@ export class CampaignsService {
       ? new Date(options.scheduledAt)
       : undefined;
 
-    // 1. Create email log entries for each recipient
+    // 1. Create email log entries for each active recipient
     const logs = this.emailLogRepository.create(
       recipients.map((r) => ({
         campaignId,
@@ -336,7 +363,7 @@ export class CampaignsService {
       ? `<br/>--<br/>${campaign.signature.content}`
       : '';
 
-    // 2. Render mail-merge variables and build job payloads
+    // 2. Render mail-merge variables and build job payloads (with unsubscribe URL)
     const payloads = recipients.map((recipient, i) => ({
       emailLogId: savedLogs[i].id,
       userId: user.id,
@@ -349,10 +376,17 @@ export class CampaignsService {
       idempotencyKey: `${campaignId}_${recipient.id}`,
       campaignStatus: scheduledAt ? CampaignStatus.SCHEDULED : CampaignStatus.SENDING,
       campaignName: campaign.name,
+      unsubscribeUrl: this.unsubscribeService.buildUnsubscribeUrl({
+        ownerUserId: user.id,
+        email: recipient.email,
+        campaignId,
+      }),
     }));
 
-    // 3. Enqueue batch
-    await this.mailQueueProducer.enqueueBatch(payloads, { scheduledAt });
+    // 3. Enqueue batch with rate limit pacing
+    const rateLimitPerMinute = user.rateLimitPerMinute ?? 30;
+    const delayStepMs = Math.floor(60000 / rateLimitPerMinute);
+    await this.mailQueueProducer.enqueueBatch(payloads, { scheduledAt, delayStepMs });
 
     // 4. Update campaign status
     await this.campaignRepository.update(campaignId, {
@@ -363,6 +397,7 @@ export class CampaignsService {
     return {
       campaignId,
       queued: recipients.length,
+      skippedUnsubscribed: allRecipients.length - recipients.length,
       scheduledAt: scheduledAt?.toISOString() ?? null,
     };
   }
@@ -404,6 +439,23 @@ export class CampaignsService {
       return { campaignId, resumed: 0 };
     }
 
+    // CHECK DAILY LIMIT
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const sentTodayCount = await this.emailLogRepository
+      .createQueryBuilder('log')
+      .innerJoin('log.campaign', 'campaign')
+      .where('campaign.userId = :userId', { userId: user.id })
+      .andWhere('log.createdAt >= :today', { today })
+      .getCount();
+
+    const dailyLimit = user.dailyLimit ?? 500;
+    if (sentTodayCount + pendingRecipients.length > dailyLimit) {
+      throw new BadRequestException(
+        `You have already queued ${sentTodayCount} emails today. Resuming this campaign (${pendingRecipients.length} recipients) would exceed your daily limit of ${dailyLimit}.`
+      );
+    }
+
     const from = `${user.firstName ?? 'Sender'} <${user.email}>`;
 
     // 1. Create email log entries for the pending recipients
@@ -426,7 +478,7 @@ export class CampaignsService {
       ? `<br/>--<br/>${campaign.signature.content}`
       : '';
 
-    // 2. Render mail-merge variables and build job payloads
+    // 2. Render mail-merge variables and build job payloads (with unsubscribe URL)
     const payloads = pendingRecipients.map((recipient, i) => ({
       emailLogId: savedLogs[i].id,
       userId: user.id,
@@ -439,10 +491,17 @@ export class CampaignsService {
       idempotencyKey: `${campaignId}_resume_${recipient.id}_${savedLogs[i].id}`,
       campaignStatus: campaign.status,
       campaignName: campaign.name,
+      unsubscribeUrl: this.unsubscribeService.buildUnsubscribeUrl({
+        ownerUserId: user.id,
+        email: recipient.email,
+        campaignId,
+      }),
     }));
 
-    // 3. Enqueue batch
-    await this.mailQueueProducer.enqueueBatch(payloads);
+    // 3. Enqueue batch with rate limit pacing
+    const rateLimitPerMinute = user.rateLimitPerMinute ?? 30;
+    const delayStepMs = Math.floor(60000 / rateLimitPerMinute);
+    await this.mailQueueProducer.enqueueBatch(payloads, { delayStepMs });
 
     // 4. Update campaign status
     await this.campaignRepository.update(campaignId, {
@@ -536,16 +595,16 @@ export class CampaignsService {
         status: 'success',
         gmailMessageId,
       };
-    } catch (error) {
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : 'Unknown error';
       // Update log to 'failed'
       await this.emailLogRepository.update(savedLog.id, {
         status: 'failed',
-        metadata: { ...savedLog.metadata, error: error.message } as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        metadata: { ...(savedLog.metadata as any), error: errMsg } as any,
       });
 
-      throw new BadRequestException(
-        `Failed to send test email: ${error.message}`,
-      );
+      throw new BadRequestException(`Failed to send test email: ${errMsg}`);
     }
   }
 }
