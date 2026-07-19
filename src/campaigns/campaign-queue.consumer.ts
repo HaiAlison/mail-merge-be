@@ -12,7 +12,8 @@ import {
   PARSE_FILE_JOB,
   ParseFileJobPayload,
 } from './campaign-queue.types';
-import { FileParserService, ParsedRow } from './file-parser.service';
+import { FileParserService, } from './file-parser.service';
+import { IParsedRow } from './campaign.type';
 
 const BATCH_SIZE = 500;
 
@@ -66,7 +67,7 @@ export class CampaignQueueConsumer extends WorkerHost {
       await this.fileParserService.streamRows(
         filePath,
         mimeType,
-        async (row: ParsedRow) => {
+        async (row: IParsedRow) => {
           const { email, ...rest } = row;
           if (!email) return; // skip rows without email
 

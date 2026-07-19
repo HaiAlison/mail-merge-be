@@ -11,6 +11,7 @@ import {
   RecipientStatus,
 } from '../entity/enums';
 import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationsGateway } from 'src/notifications/notifications.gateway';
 
 @Injectable()
 export class CampaignsListener {
@@ -22,6 +23,7 @@ export class CampaignsListener {
     @InjectRepository(CampaignRecipient)
     private readonly recipientRepository: Repository<CampaignRecipient>,
     private readonly notificationsService: NotificationsService,
+    private readonly notificationsGateway: NotificationsGateway,
   ) {}
 
   @OnEvent('email.sent')
@@ -53,8 +55,10 @@ export class CampaignsListener {
             1,
           );
         }
-
-        const isDone = await this.checkAndMarkCampaignDone(payload.campaignId);
+        const isDone = await this.checkAndMarkCampaignDone(
+          payload.campaignId,
+          payload.userId,
+        );
 
         // Only notify when the campaign fully completes (not on every email)
         if (isDone && payload.userId) {
@@ -88,11 +92,26 @@ export class CampaignsListener {
   /**
    * Returns true if the campaign just transitioned to done (sent / failed).
    */
-  private async checkAndMarkCampaignDone(campaignId: string): Promise<boolean> {
+  private async checkAndMarkCampaignDone(
+    campaignId: string,
+    userId?: string,
+  ): Promise<boolean> {
     const campaign = await this.campaignRepository.findOne({
       where: { id: campaignId },
     });
     if (!campaign) return false;
+
+    if (userId) {
+      this.notificationsGateway.sendToUser(userId, 'campaign.progress', {
+        campaignId,
+        status: campaign.status,
+        sentAt: campaign.sentAt,
+        sentCount: campaign.sentCount ?? 0,
+        schedulingCount: campaign.schedulingCount ?? 0,
+        failedCount: campaign.failedCount ?? 0,
+        totalRecipients: campaign.totalRecipients ?? 0,
+      });
+    }
 
     const total = campaign.totalRecipients ?? 0;
     const done = (campaign.sentCount ?? 0) + (campaign.failedCount ?? 0);
@@ -137,7 +156,10 @@ export class CampaignsListener {
           1,
         );
 
-        const isDone = await this.checkAndMarkCampaignDone(payload.campaignId);
+        const isDone = await this.checkAndMarkCampaignDone(
+          payload.campaignId,
+          payload.userId,
+        );
 
         // Notify user when all emails done and there are failures
         if (isDone && payload.userId) {

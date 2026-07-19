@@ -9,6 +9,7 @@ import { CampaignRecipient } from '../entity/campaign-recipient.entity';
 import { Campaign } from '../entity/campaign.entity';
 import { MailModule } from '../mail/mail.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { UnsubscribeModule } from 'src/unsubscribe/unsubscribe.module';
 import { CampaignQueueConsumer } from './campaign-queue.consumer';
 import { CampaignQueueProducer } from './campaign-queue.producer';
 import { CAMPAIGN_QUEUE } from './campaign-queue.types';
@@ -30,6 +31,7 @@ import { FileParserService } from './file-parser.service';
     MailModule,
     UsersModule,
     NotificationsModule,
+    UnsubscribeModule,
   ],
   controllers: [CampaignsController],
   providers: [

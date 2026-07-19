@@ -10,6 +10,8 @@ import { GmailAuthService } from './gmail-auth.service';
 import { MAIL_QUEUE, SendEmailJobPayload } from './mail-queue.types';
 import { MailService } from './mail.service';
 import { gmail } from '@googleapis/gmail';
+import { NotificationsService } from 'src/notifications/notifications.service';
+import { NotificationType } from 'src/entity/enums';
 
 @Processor(MAIL_QUEUE, {
   concurrency: 5, // process 5 emails in parallel per worker
@@ -24,6 +26,7 @@ export class MailQueueConsumer extends WorkerHost {
     private readonly emailLogRepository: Repository<CampaignEmailLog>,
     private readonly notificationsGateway: NotificationsGateway,
     private readonly eventEmitter: EventEmitter2,
+    private readonly notificationsService: NotificationsService,
   ) {
     super();
   }
@@ -45,7 +48,7 @@ export class MailQueueConsumer extends WorkerHost {
       );
     } catch (error) {
       if (error instanceof UnauthorizedException) {
-        this.notificationsGateway.sendToUser(payload.userId, 'campaign_error', {
+        this.notificationsGateway.sendToUser(payload.userId, NotificationType.CAMPAIGN_FAILED, {
           campaignId: payload.campaignId,
           message: 'Google Token expired. Please reconnect.',
         });
@@ -53,6 +56,13 @@ export class MailQueueConsumer extends WorkerHost {
         if (payload.campaignId) {
           this.eventEmitter.emit('campaign.pause', {
             campaignId: payload.campaignId,
+          });
+          this.notificationsService.createNotification({
+            userId: payload.userId,
+            type: NotificationType.CAMPAIGN_FAILED,
+            title: 'Campaign Paused',
+            message: `Your Google Token expired. Please reconnect.`,
+            metadata: { campaignId: payload.campaignId },
           });
         }
         throw new UnrecoverableError(error.message);

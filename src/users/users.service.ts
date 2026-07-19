@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { UpdateSettingsDto } from './dto/update-settings.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../entity/user.entity';
@@ -65,5 +66,16 @@ export class UsersService {
   toPublicUser(user: User) {
     const { googleRefreshToken: _, password: __, ...rest } = user;
     return rest;
+  }
+
+  async updateSettings(userId: string, dto: UpdateSettingsDto): Promise<User> {
+    const user = await this.findById(userId);
+    if (dto.rateLimitPerMinute !== undefined) {
+      user.rateLimitPerMinute = dto.rateLimitPerMinute;
+    }
+    if (dto.dailyLimit !== undefined) {
+      user.dailyLimit = dto.dailyLimit;
+    }
+    return this.userRepository.save(user);
   }
 }

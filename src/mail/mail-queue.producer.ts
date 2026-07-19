@@ -35,7 +35,7 @@ export class MailQueueProducer {
       attempts: 3,
       backoff: {
         type: 'exponential',
-        delay: 5_000, // 5s, 25s, 125s
+        delay: 10_000, // 5s, 25s, 125s
       },
       removeOnComplete: { count: 1000 },
       removeOnFail: { count: 500 },
@@ -53,19 +53,21 @@ export class MailQueueProducer {
    */
   async enqueueBatch(
     payloads: SendEmailJobPayload[],
-    options?: { scheduledAt?: Date },
+    options?: { scheduledAt?: Date; delayStepMs?: number },
   ): Promise<string[]> {
-    const delay = options?.scheduledAt
+    const baseDelay = options?.scheduledAt
       ? Math.max(0, options.scheduledAt.getTime() - Date.now())
       : 0;
+      
+    const delayStepMs = options?.delayStepMs || 0;
 
     const jobs = await this.mailQueue.addBulk(
-      payloads.map((payload) => ({
+      payloads.map((payload, i) => ({
         name: SEND_EMAIL_JOB,
         data: payload,
         opts: {
           jobId: payload.idempotencyKey,
-          delay,
+          delay: baseDelay + (i * delayStepMs),
           attempts: 3,
           backoff: { type: 'exponential' as const, delay: 5_000 },
           removeOnComplete: { count: 1000 },

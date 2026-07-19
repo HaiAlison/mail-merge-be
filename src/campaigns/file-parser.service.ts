@@ -3,10 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 const csv = require('csv-parser');
 import * as ExcelJS from 'exceljs';
 import * as fs from 'fs';
-
-export interface ParsedRow {
-  [key: string]: string;
-}
+import { IParsedRow, IPreviewResult } from './campaign.type';
 
 @Injectable()
 export class FileParserService {
@@ -30,12 +27,12 @@ export class FileParserService {
     filePath: string,
     mimeType: string,
     previewCount = 3,
-  ): Promise<{ headers: string[]; previewRows: ParsedRow[] }> {
+  ): Promise<IPreviewResult> {
     if (this.isCsv(mimeType)) {
       return this.extractCsvPreview(filePath, previewCount);
     }
     if (this.isXlsx(mimeType)) {
-      return this.extractXlsxPreview(filePath, previewCount);
+      return this.extractXlsxPreview(filePath);
     }
     throw new Error(`Unsupported file type: ${mimeType}`);
   }
@@ -43,27 +40,27 @@ export class FileParserService {
   private extractCsvPreview(
     filePath: string,
     previewCount: number,
-  ): Promise<{ headers: string[]; previewRows: ParsedRow[] }> {
+  ): Promise<IPreviewResult> {
     return new Promise((resolve, reject) => {
       const stream = fs.createReadStream(filePath);
       const parser = csv();
       let headers: string[] = [];
-      const previewRows: ParsedRow[] = [];
+      const rows: IParsedRow[] = [];
 
       parser.once('headers', (h: string[]) => {
         headers = h;
       });
 
-      parser.on('data', (row: ParsedRow) => {
-        previewRows.push(row);
-        if (previewRows.length >= previewCount) {
+      parser.on('data', (row: IParsedRow) => {
+        rows.push(row);
+        if (rows.length >= previewCount) {
           stream.destroy(); // Stop reading after we got enough rows
-          resolve({ headers, previewRows });
+          resolve({ headers, rows, previewRow: rows[0] || {}, totalRows: rows.length });
         }
       });
 
       parser.on('end', () => {
-        resolve({ headers, previewRows });
+        resolve({ headers, rows, previewRow: rows[0] || {}, totalRows: rows.length });
       });
 
       parser.on('error', reject);
@@ -74,12 +71,11 @@ export class FileParserService {
 
   private async extractXlsxPreview(
     filePath: string,
-    previewCount: number,
-  ): Promise<{ headers: string[]; previewRows: ParsedRow[] }> {
+  ): Promise<IPreviewResult> {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(filePath);
     const sheet = workbook.worksheets[0];
-    if (!sheet) return { headers: [], previewRows: [] };
+    if (!sheet) return { headers: [], rows: [], previewRow: {}, totalRows: 0 };
 
     const headerRow = sheet.getRow(1);
     const headers: string[] = [];
@@ -90,12 +86,11 @@ export class FileParserService {
     const cleanHeaders = headers.filter(Boolean);
     const headerMapping = headers; // map col index to header string
 
-    const previewRows: ParsedRow[] = [];
+    const rows: IParsedRow[] = [];
     sheet.eachRow((row, rowNumber) => {
       if (rowNumber === 1) return; // skip header
-      if (previewRows.length >= previewCount) return;
 
-      const rowData: ParsedRow = {};
+      const rowData: IParsedRow = {};
       row.eachCell((cell, colNumber) => {
         const header = headerMapping[colNumber - 1];
         if (header) {
@@ -106,10 +101,10 @@ export class FileParserService {
           rowData[header] = val;
         }
       });
-      previewRows.push(rowData);
+      rows.push(rowData);
     });
 
-    return { headers: cleanHeaders, previewRows };
+    return { headers: cleanHeaders, rows, previewRow: rows[0] || {}, totalRows: rows.length };
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -119,7 +114,7 @@ export class FileParserService {
   async streamRows(
     filePath: string,
     mimeType: string,
-    onRow: (row: ParsedRow) => Promise<void>,
+    onRow: (row: IParsedRow) => Promise<void>,
     onProgress?: (processed: number) => void,
   ): Promise<number> {
     if (this.isCsv(mimeType)) {
@@ -133,7 +128,7 @@ export class FileParserService {
 
   private streamCsvRows(
     filePath: string,
-    onRow: (row: ParsedRow) => Promise<void>,
+    onRow: (row: IParsedRow) => Promise<void>,
     onProgress?: (processed: number) => void,
   ): Promise<number> {
     return new Promise((resolve, reject) => {
@@ -142,7 +137,7 @@ export class FileParserService {
 
       stream
         .pipe(csv())
-        .on('data', async (row: ParsedRow) => {
+        .on('data', async (row: IParsedRow) => {
           stream.pause();
           try {
             await onRow(row);
@@ -163,7 +158,7 @@ export class FileParserService {
 
   private async streamXlsxRows(
     filePath: string,
-    onRow: (row: ParsedRow) => Promise<void>,
+    onRow: (row: IParsedRow) => Promise<void>,
     onProgress?: (processed: number) => void,
   ): Promise<number> {
     const workbook = new ExcelJS.Workbook();
@@ -183,7 +178,7 @@ export class FileParserService {
       const row = sheet.getRow(i);
       if (!row.hasValues) continue;
 
-      const parsed: ParsedRow = {};
+      const parsed: IParsedRow = {};
       row.eachCell((cell, colNum) => {
         const header = headers[colNum - 1];
         if (header) {
@@ -213,7 +208,7 @@ export class FileParserService {
   private isXlsx(mimeType: string): boolean {
     return (
       mimeType ===
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
       mimeType === 'application/vnd.ms-excel'
     );
   }

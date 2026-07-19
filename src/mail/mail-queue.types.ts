@@ -29,6 +29,8 @@ export interface SendEmailJobPayload {
   /** Loại campaign */
   campaignStatus: CampaignStatus;
   campaignName: string;
+  /** URL unsubscribe nhúng vào email (optional — chỉ khi là campaign) */
+  unsubscribeUrl?: string;
 }
 
 export interface EmailSentEvent {

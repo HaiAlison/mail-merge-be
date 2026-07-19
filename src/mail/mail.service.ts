@@ -143,21 +143,45 @@ export class MailService {
       .map((address) => this.encodeAddress(address))
       .join(', ');
 
+    // ── Unsubscribe headers (RFC 2369 + RFC 8058) ───────────────────────────
+    const unsubscribeHeaders: string[] = [];
+    if (dto.unsubscribeUrl) {
+      unsubscribeHeaders.push(
+        `List-Unsubscribe: <${dto.unsubscribeUrl}>`,
+        `List-Unsubscribe-Post: List-Unsubscribe=One-Click`,
+      );
+    }
+
     const headerLines = [
       `From: ${fromEncoded}`,
       `To: ${toEncoded}`,
       `Subject: ${subjectEncoded}`,
       `MIME-Version: 1.0`,
       `Content-Type: multipart/alternative; boundary="${boundary}"`,
+      ...unsubscribeHeaders,
       ...Object.entries(dto.headers ?? {}).map(([k, v]) => `${k}: ${v}`),
     ].join('\r\n');
+
+    // ── Append unsubscribe footer to plain text ──────────────────────────────
+    const plainText = dto.unsubscribeUrl
+      ? `${dto.text ?? ''}\r\n\r\n--\r\nTo unsubscribe, visit: ${dto.unsubscribeUrl}`
+      : (dto.text ?? '');
+
+    // ── Append unsubscribe footer to HTML ───────────────────────────────────
+    const unsubscribeFooterHtml = dto.unsubscribeUrl
+      ? `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;text-align:center;font-size:12px;color:#9ca3af;">
+  You received this email because you were added to a mailing list.<br/>
+  <a href="${dto.unsubscribeUrl}" style="color:#6b7280;text-decoration:underline;">Unsubscribe</a>
+</div>`
+      : '';
+    const htmlBody = `${dto.html ?? ''}${unsubscribeFooterHtml}`;
 
     const textPart = [
       `--${boundary}`,
       'Content-Type: text/plain; charset=UTF-8',
       'Content-Transfer-Encoding: quoted-printable',
       '',
-      dto.text ?? '',
+      plainText,
     ].join('\r\n');
 
     const htmlPart = [
@@ -165,7 +189,7 @@ export class MailService {
       'Content-Type: text/html; charset=UTF-8',
       'Content-Transfer-Encoding: quoted-printable',
       '',
-      dto.html ?? '',
+      htmlBody,
       `--${boundary}--`,
     ].join('\r\n');
 
