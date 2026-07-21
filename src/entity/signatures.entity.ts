@@ -3,7 +3,7 @@ import { Column, Entity, OneToMany, OneToOne } from "typeorm";
 import { SignatureAttachment } from "./signature-attachment.entity";
 import { Campaign } from "./campaign.entity";
 
-@Entity('signatures')
+@Entity('signatures_')
 export class Signature extends BaseTimeStampEntity {
     @Column()
     name: string;
