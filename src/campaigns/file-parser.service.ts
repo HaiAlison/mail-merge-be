@@ -10,16 +10,6 @@ export class FileParserService {
   private readonly logger = new Logger(FileParserService.name);
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Cloud upload stub — swap out for S3/GCS in the future
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  async pushFileToCloud(localPath: string): Promise<string> {
-    // TODO: Upload to S3/GCS and return public/signed URL
-    // Example: return this.s3Service.upload(localPath);
-    return localPath; // currently returns local path as-is
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────────
   // Extract the header row and a few preview rows
   // ─────────────────────────────────────────────────────────────────────────────
 

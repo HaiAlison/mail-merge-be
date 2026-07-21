@@ -9,7 +9,10 @@ import { CampaignDataSource } from 'src/entity/campaign-data-source.entity';
 import { GmailAuthService } from 'src/mail/gmail-auth.service';
 import { MailService } from 'src/mail/mail.service';
 import { UsersService } from 'src/users/users.service';
-import { handleError } from 'src/utils/common/handle';
+import { handleError, pushFileOnCloud, downloadFileFromCloud } from 'src/utils/common/handle';
+import { PushFileOnCloud } from 'src/utils/common/interface';
+import { GMAIL_SIMPLE_UPLOAD_LIMIT } from 'src/utils/common/constant';
+import * as fs from 'fs';
 import { UnsubscribeService } from 'src/unsubscribe/unsubscribe.service';
 import { Repository } from 'typeorm';
 import { uuid } from 'uuidv4';
@@ -134,40 +137,65 @@ export class CampaignsService {
 
       for (const file of files) {
         const id = uuid();
+        const fileBuffer = fs.readFileSync(file.path);
+
         switch (type) {
           case UploadType.ATTACHMENT: {
+            const pushFileDto: PushFileOnCloud = {
+              data: fileBuffer,
+              dir: 'campaign-attachments',
+              file_name: file.originalname,
+              isAttachment: true,
+            };
+            const uploaded = await pushFileOnCloud(pushFileDto);
+
             const attachment = this.attachmentRepository.create({
               id,
-              fileName: file.originalname,
-              filePath: file.path,
+              fileName: uploaded.fileName,
+              filePath: uploaded.filePath,
               fileSize: String(file.size),
-              mimeType: file.mimetype,
+              mimeType: uploaded.mimeType,
             });
             await this.attachmentRepository.save(attachment);
+
+            // Clean up local temp file
+            fs.unlinkSync(file.path);
+
             results.push({ id });
             break;
           }
           case UploadType.DATA_SOURCE: {
-            const dataSource = this.datasourceRepository.create({
-              id,
-              fileName: file.originalname,
-              filePath: file.path,
-              fileSize: String(file.size),
-              mimeType: file.mimetype,
-            });
-            await this.datasourceRepository.save(dataSource);
-
-            // Extract headers and preview rows for FE to use in mapping and review
+            // Parse locally first (needs file on disk)
             const preview = await this.fileParserService.extractPreview(
               file.path,
               file.mimetype,
               3,
             );
+
+            // Upload to S3
+            const pushFileDto: PushFileOnCloud = {
+              data: fileBuffer,
+              dir: 'campaign-datasources',
+              file_name: file.originalname,
+            };
+            const uploaded = await pushFileOnCloud(pushFileDto);
+
+            const dataSource = this.datasourceRepository.create({
+              id,
+              fileName: uploaded.fileName,
+              filePath: uploaded.filePath,
+              fileSize: String(file.size),
+              mimeType: uploaded.mimeType,
+            });
+            await this.datasourceRepository.save(dataSource);
+
+            // Clean up local temp file
+            fs.unlinkSync(file.path);
+
             results.push({
               id,
               headers: preview.headers,
               previewRow: preview.previewRow,
-              // rows: preview.rows,
               totalRows: preview.totalRows,
             });
             break;
@@ -186,14 +214,27 @@ export class CampaignsService {
 
   async addDataSource(file: MulterFile, campaignId: string) {
     try {
+      const fileBuffer = fs.readFileSync(file.path);
+      const pushFileDto: PushFileOnCloud = {
+        data: fileBuffer,
+        dir: 'campaign-attachments',
+        file_name: file.originalname,
+        isAttachment: true,
+      };
+      const uploaded = await pushFileOnCloud(pushFileDto);
+
       const attachment = this.attachmentRepository.create({
-        fileName: file.originalname,
-        filePath: file.path,
+        fileName: uploaded.fileName,
+        filePath: uploaded.filePath,
         fileSize: String(file.size),
-        mimeType: file.mimetype,
+        mimeType: uploaded.mimeType,
         campaign: await this.findOne(campaignId),
       });
       await this.attachmentRepository.save(attachment);
+
+      // Clean up local temp file
+      fs.unlinkSync(file.path);
+
       return attachment;
     } catch (error) {
       throw handleError(error);
@@ -291,7 +332,7 @@ export class CampaignsService {
   ) {
     const campaign = await this.campaignRepository.findOne({
       where: { id: campaignId },
-      relations: ['recipients', 'signature'],
+      relations: ['recipients', 'signature', 'attachments'],
     });
 
     if (!campaign) {
@@ -363,6 +404,13 @@ export class CampaignsService {
       ? `<br/>--<br/>${campaign.signature.content}`
       : '';
 
+    // Build attachment metadata (S3 references only — no binary in Redis)
+    const attachmentMeta = (campaign.attachments ?? []).map((att) => ({
+      fileName: att.fileName,
+      filePath: att.filePath,
+      mimeType: att.mimeType,
+    }));
+
     // 2. Render mail-merge variables and build job payloads (with unsubscribe URL)
     const payloads = recipients.map((recipient, i) => ({
       emailLogId: savedLogs[i].id,
@@ -381,6 +429,7 @@ export class CampaignsService {
         email: recipient.email,
         campaignId,
       }),
+      attachments: attachmentMeta.length ? attachmentMeta : undefined,
     }));
 
     // 3. Enqueue batch with rate limit pacing
@@ -405,7 +454,7 @@ export class CampaignsService {
   async resumeCampaign(campaignId: string, user: User) {
     const campaign = await this.campaignRepository.findOne({
       where: { id: campaignId },
-      relations: ['recipients', 'signature'],
+      relations: ['recipients', 'signature', 'attachments'],
     });
 
     if (!campaign) {
@@ -478,6 +527,13 @@ export class CampaignsService {
       ? `<br/>--<br/>${campaign.signature.content}`
       : '';
 
+    // Build attachment metadata
+    const attachmentMeta = (campaign.attachments ?? []).map((att) => ({
+      fileName: att.fileName,
+      filePath: att.filePath,
+      mimeType: att.mimeType,
+    }));
+
     // 2. Render mail-merge variables and build job payloads (with unsubscribe URL)
     const payloads = pendingRecipients.map((recipient, i) => ({
       emailLogId: savedLogs[i].id,
@@ -496,6 +552,7 @@ export class CampaignsService {
         email: recipient.email,
         campaignId,
       }),
+      attachments: attachmentMeta.length ? attachmentMeta : undefined,
     }));
 
     // 3. Enqueue batch with rate limit pacing
@@ -517,7 +574,7 @@ export class CampaignsService {
   async sendTestCampaign(campaignId: string, user: User, testEmail: string) {
     const campaign = await this.campaignRepository.findOne({
       where: { id: campaignId },
-      relations: ['recipients', 'signature'],
+      relations: ['recipients', 'signature', 'attachments'],
     });
 
     if (!campaign) {
@@ -563,19 +620,48 @@ export class CampaignsService {
       isTest: true,
     };
 
-    // 3. Get OAuth2 client
+    // 3. Download attachments from S3 for inline send
+    let emailAttachments: { filename: string; content: Buffer; contentType: string }[] | undefined;
+    if (campaign.attachments?.length) {
+      emailAttachments = await Promise.all(
+        campaign.attachments.map(async (att) => ({
+          filename: att.fileName,
+          content: await downloadFileFromCloud(att.filePath, att.fileName),
+          contentType: att.mimeType,
+        })),
+      );
+    }
+
+    // 4. Get OAuth2 client
     const oauth2Client = await this.gmailAuthService.getOAuth2Client(user.id);
     const mail = gmail({ version: 'v1', auth: oauth2Client });
 
-    // 4. Build raw MIME message
-    const raw = this.mailService.buildRawEmail(payload);
+    // 5. Build raw MIME message
+    const raw = this.mailService.buildRawEmail({
+      ...payload,
+      attachments: emailAttachments,
+    });
 
-    // 5. Send directly via Gmail API
+    // 6. Send directly via Gmail API — use media upload for large messages
     try {
-      const response = await mail.users.messages.send({
-        userId: 'me',
-        requestBody: { raw },
-      });
+      const rawBuffer = Buffer.from(raw, 'base64url');
+      let response;
+
+      if (rawBuffer.length > GMAIL_SIMPLE_UPLOAD_LIMIT) {
+        response = await mail.users.messages.send({
+          userId: 'me',
+          uploadType: 'media',
+          media: {
+            mimeType: 'message/rfc822',
+            body: rawBuffer,
+          },
+        } as any);
+      } else {
+        response = await mail.users.messages.send({
+          userId: 'me',
+          requestBody: { raw },
+        });
+      }
 
       const gmailMessageId = response.data.id;
 

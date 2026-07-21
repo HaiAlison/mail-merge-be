@@ -12,6 +12,8 @@ import { MailService } from './mail.service';
 import { gmail } from '@googleapis/gmail';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { NotificationType } from 'src/entity/enums';
+import { downloadFileFromCloud } from 'src/utils/common/handle';
+import { GMAIL_SIMPLE_UPLOAD_LIMIT } from 'src/utils/common/constant';
 
 @Processor(MAIL_QUEUE, {
   concurrency: 5, // process 5 emails in parallel per worker
@@ -70,27 +72,56 @@ export class MailQueueConsumer extends WorkerHost {
       throw error;
     }
 
-    // 3. Build raw MIME message
-    const raw = await this.mailService.buildRawEmail({
+    // 3. Download attachments from S3 if present
+    let emailAttachments: { filename: string; content: Buffer; contentType: string }[] | undefined;
+    if (payload.attachments?.length) {
+      emailAttachments = await Promise.all(
+        payload.attachments.map(async (att) => ({
+          filename: att.fileName,
+          content: await downloadFileFromCloud(att.filePath, att.fileName),
+          contentType: att.mimeType,
+        })),
+      );
+    }
+
+    // 4. Build raw MIME message
+    const raw = this.mailService.buildRawEmail({
       from: payload.from,
       to: payload.to,
       subject: payload.subject,
       html: payload.html,
       text: payload.text,
       headers: payload.headers,
+      unsubscribeUrl: payload.unsubscribeUrl,
+      attachments: emailAttachments,
     });
 
-    // 4. Send via Gmail API
+    // 5. Send via Gmail API — use media upload for large messages (> 5 MB)
     const mail = gmail({ version: 'v1', auth: oauth2Client });
-    const response = await mail.users.messages.send({
-      userId: 'me',
-      requestBody: { raw },
-    });
+    const rawBuffer = Buffer.from(raw, 'base64url');
+    let response;
+
+    if (rawBuffer.length > GMAIL_SIMPLE_UPLOAD_LIMIT) {
+      // Resumable/media upload for messages with large attachments
+      response = await mail.users.messages.send({
+        userId: 'me',
+        uploadType: 'media',
+        media: {
+          mimeType: 'message/rfc822',
+          body: rawBuffer,
+        },
+      } as any);
+    } else {
+      response = await mail.users.messages.send({
+        userId: 'me',
+        requestBody: { raw },
+      });
+    }
 
     const gmailMessageId = response.data.id;
     const now = new Date();
 
-    // 5. Update email log → SENT
+    // 6. Update email log → SENT
     await this.emailLogRepository
       .createQueryBuilder()
       .update(CampaignEmailLog)
@@ -102,7 +133,7 @@ export class MailQueueConsumer extends WorkerHost {
       .where('id = :id', { id: payload.emailLogId })
       .execute();
 
-    // 6. Emit email.sent event
+    // 7. Emit email.sent event
     this.eventEmitter.emit('email.sent', { payload, gmailMessageId });
 
     this.logger.log(

@@ -31,6 +31,8 @@ export interface SendEmailJobPayload {
   campaignName: string;
   /** URL unsubscribe nhúng vào email (optional — chỉ khi là campaign) */
   unsubscribeUrl?: string;
+  /** Attachment metadata — S3 references, no binary data in Redis */
+  attachments?: { fileName: string; filePath: string; mimeType: string }[];
 }
 
 export interface EmailSentEvent {
