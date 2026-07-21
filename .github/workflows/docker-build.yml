@@ -70,7 +70,7 @@ jobs:
       - name: Trigger Webhook for CD
         run: |
           SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
-          curl -X POST \
+          curl --max-time 90 -X POST \
             -H "X-Webhook-Token: ${{ secrets.WEBHOOK_SECRET }}" \
             -H "Content-Type: application/json" \
             -d "{\"sha\": \"$SHORT_SHA\"}" \
