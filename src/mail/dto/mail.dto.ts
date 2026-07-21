@@ -43,4 +43,8 @@ export class BuildRawEmailDto {
   @IsString()
   @IsOptional()
   unsubscribeUrl?: string;
+
+  /** File attachments — in-memory buffers, NOT serialized to Redis */
+  @IsOptional()
+  attachments?: { filename: string; content: Buffer; contentType: string }[];
 }

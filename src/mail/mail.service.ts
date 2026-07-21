@@ -16,6 +16,7 @@ import {
 } from './dto/send-email.dto';
 import { MailQueueProducer } from './mail-queue.producer';
 import { Campaign } from 'src/entity/campaign.entity';
+import { GMAIL_MAX_MESSAGE_SIZE } from 'src/utils/common/constant';
 
 @Injectable()
 export class MailService {
@@ -133,9 +134,12 @@ export class MailService {
 
   /**
    * Build a base64url-encoded RFC 2822 MIME message for Gmail API.
+   * Supports attachments via multipart/mixed wrapping.
    */
   buildRawEmail(dto: BuildRawEmailDto): string {
-    const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const hasAttachments = dto.attachments && dto.attachments.length > 0;
+    const altBoundary = `----=_Alt_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const mixedBoundary = `----=_Mixed_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
     const subjectEncoded = `=?UTF-8?B?${Buffer.from(dto.subject).toString('base64')}?=`;
     const fromEncoded = this.encodeAddress(dto.from);
@@ -152,12 +156,17 @@ export class MailService {
       );
     }
 
+    // Top-level Content-Type depends on whether we have attachments
+    const topContentType = hasAttachments
+      ? `multipart/mixed; boundary="${mixedBoundary}"`
+      : `multipart/alternative; boundary="${altBoundary}"`;
+
     const headerLines = [
       `From: ${fromEncoded}`,
       `To: ${toEncoded}`,
       `Subject: ${subjectEncoded}`,
       `MIME-Version: 1.0`,
-      `Content-Type: multipart/alternative; boundary="${boundary}"`,
+      `Content-Type: ${topContentType}`,
       ...unsubscribeHeaders,
       ...Object.entries(dto.headers ?? {}).map(([k, v]) => `${k}: ${v}`),
     ].join('\r\n');
@@ -177,7 +186,7 @@ export class MailService {
     const htmlBody = `${dto.html ?? ''}${unsubscribeFooterHtml}`;
 
     const textPart = [
-      `--${boundary}`,
+      `--${altBoundary}`,
       'Content-Type: text/plain; charset=UTF-8',
       'Content-Transfer-Encoding: quoted-printable',
       '',
@@ -185,15 +194,53 @@ export class MailService {
     ].join('\r\n');
 
     const htmlPart = [
-      `--${boundary}`,
+      `--${altBoundary}`,
       'Content-Type: text/html; charset=UTF-8',
       'Content-Transfer-Encoding: quoted-printable',
       '',
       htmlBody,
-      `--${boundary}--`,
+      `--${altBoundary}--`,
     ].join('\r\n');
 
-    const raw = `${headerLines}\r\n\r\n${textPart}\r\n${htmlPart}`;
-    return Buffer.from(raw).toString('base64url');
+    const alternativeBody = `${textPart}\r\n${htmlPart}`;
+
+    let raw: string;
+
+    if (hasAttachments) {
+      // multipart/mixed: alternative part + attachment parts
+      const altPart = [
+        `--${mixedBoundary}`,
+        `Content-Type: multipart/alternative; boundary="${altBoundary}"`,
+        '',
+        alternativeBody,
+      ].join('\r\n');
+
+      const attachmentParts = dto.attachments.map((att) => {
+        const encodedFilename = `=?UTF-8?B?${Buffer.from(att.filename).toString('base64')}?=`;
+        return [
+          `--${mixedBoundary}`,
+          `Content-Type: ${att.contentType}; name="${encodedFilename}"`,
+          'Content-Transfer-Encoding: base64',
+          `Content-Disposition: attachment; filename="${encodedFilename}"`,
+          '',
+          att.content.toString('base64').replace(/(.{76})/g, '$1\r\n'),
+        ].join('\r\n');
+      });
+
+      raw = `${headerLines}\r\n\r\n${altPart}\r\n${attachmentParts.join('\r\n')}\r\n--${mixedBoundary}--`;
+    } else {
+      // No attachments — flat multipart/alternative (backward compatible)
+      raw = `${headerLines}\r\n\r\n${alternativeBody}`;
+    }
+
+    // Validate total message size against Gmail limit
+    const rawBuffer = Buffer.from(raw);
+    if (rawBuffer.length > GMAIL_MAX_MESSAGE_SIZE) {
+      throw new BadRequestException(
+        `Email message size (${(rawBuffer.length / 1024 / 1024).toFixed(1)} MB) exceeds Gmail's 25 MB limit. Reduce attachment sizes.`,
+      );
+    }
+
+    return rawBuffer.toString('base64url');
   }
 }
