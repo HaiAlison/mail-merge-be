@@ -74,4 +74,4 @@ jobs:
             -H "X-Webhook-Token: ${{ secrets.WEBHOOK_SECRET }}" \
             -H "Content-Type: application/json" \
             -d "{\"sha\": \"$SHORT_SHA\"}" \
-            ${{ secrets.WEBHOOK_DOMAIN }}/hooks/deploy-app
+            ${{ secrets.WEBHOOK_DOMAIN }}/hooks/deploy-be
