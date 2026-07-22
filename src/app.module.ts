@@ -24,7 +24,9 @@ import { SignaturesModule } from './signatures/signatures.module';
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => ({
         connection: {
-          url: config.getOrThrow<string>('REDIS_URL'),
+          host: config.getOrThrow<string>('REDIS_HOST'),
+          port: config.get<number>('REDIS_PORT', 6379),
+          password: config.get<string>('REDIS_PASSWORD') || undefined,
           maxRetriesPerRequest: null, // required for BullMQ workers
           enableReadyCheck: false,
         },
@@ -42,4 +44,4 @@ import { SignaturesModule } from './signatures/signatures.module';
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule { }
+export class AppModule {}
