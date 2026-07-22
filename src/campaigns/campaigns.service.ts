@@ -112,6 +112,7 @@ export class CampaignsService {
           campaignId: savedCampaign.id,
           dataSourceId,
           filePath: dataSource.filePath,
+          fileName: dataSource.fileName,
           mimeType: dataSource.mimeType,
           placeholdersMap: placeholdersMap || {},
           userId: user.id,

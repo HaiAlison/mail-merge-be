@@ -5,6 +5,7 @@ export interface ParseFileJobPayload {
   campaignId: string;
   dataSourceId: string;
   filePath: string;
+  fileName: string;
   mimeType: string;
   placeholdersMap: Record<string, string>;
   userId: string;

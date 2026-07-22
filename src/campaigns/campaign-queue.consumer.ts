@@ -12,8 +12,9 @@ import {
   PARSE_FILE_JOB,
   ParseFileJobPayload,
 } from './campaign-queue.types';
-import { FileParserService, } from './file-parser.service';
+import { FileParserService } from './file-parser.service';
 import { IParsedRow } from './campaign.type';
+import { getStreamFromCloud } from '../utils/common/handle';
 
 const BATCH_SIZE = 500;
 
@@ -35,7 +36,7 @@ export class CampaignQueueConsumer extends WorkerHost {
   async process(job: Job<ParseFileJobPayload>): Promise<void> {
     if (job.name !== PARSE_FILE_JOB) return;
 
-    const { campaignId, filePath, mimeType, placeholdersMap, userId } =
+    const { campaignId, filePath, fileName, mimeType, placeholdersMap, userId } =
       job.data;
     this.logger.log(`[${campaignId}] Starting file parse job`);
 
@@ -64,8 +65,10 @@ export class CampaignQueueConsumer extends WorkerHost {
         batch = [];
       };
 
+      const stream = await getStreamFromCloud(filePath, fileName);
+
       await this.fileParserService.streamRows(
-        filePath,
+        stream,
         mimeType,
         async (row: IParsedRow) => {
           const { email, ...rest } = row;

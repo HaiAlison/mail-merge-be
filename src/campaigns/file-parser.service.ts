@@ -3,6 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 const csv = require('csv-parser');
 import * as ExcelJS from 'exceljs';
 import * as fs from 'fs';
+import * as stream from 'stream';
 import { IParsedRow, IPreviewResult } from './campaign.type';
 
 @Injectable()
@@ -102,28 +103,27 @@ export class FileParserService {
   // ─────────────────────────────────────────────────────────────────────────────
 
   async streamRows(
-    filePath: string,
+    stream: stream.Readable,
     mimeType: string,
     onRow: (row: IParsedRow) => Promise<void>,
     onProgress?: (processed: number) => void,
   ): Promise<number> {
     if (this.isCsv(mimeType)) {
-      return this.streamCsvRows(filePath, onRow, onProgress);
+      return this.streamCsvRows(stream, onRow, onProgress);
     }
     if (this.isXlsx(mimeType)) {
-      return this.streamXlsxRows(filePath, onRow, onProgress);
+      return this.streamXlsxRows(stream, onRow, onProgress);
     }
     throw new Error(`Unsupported file type: ${mimeType}`);
   }
 
   private streamCsvRows(
-    filePath: string,
+    stream: stream.Readable,
     onRow: (row: IParsedRow) => Promise<void>,
     onProgress?: (processed: number) => void,
   ): Promise<number> {
     return new Promise((resolve, reject) => {
       let count = 0;
-      const stream = fs.createReadStream(filePath);
 
       stream
         .pipe(csv())
@@ -147,12 +147,11 @@ export class FileParserService {
   }
 
   private async streamXlsxRows(
-    filePath: string,
+    stream: stream.Readable,
     onRow: (row: IParsedRow) => Promise<void>,
     onProgress?: (processed: number) => void,
   ): Promise<number> {
     const workbook = new ExcelJS.Workbook();
-    const stream = fs.createReadStream(filePath);
     await workbook.xlsx.read(stream as any);
 
     const sheet = workbook.worksheets[0];

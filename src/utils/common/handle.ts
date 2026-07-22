@@ -18,6 +18,7 @@ import axiosRetry from 'axios-retry';
 import { pickBy } from 'lodash';
 import { fromBuffer } from 'file-type';
 import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { Readable } from 'stream';
 
 export const handleError = (e) => {
   if (new RegExp('Could not find any entity of type').test(e.message))
@@ -326,6 +327,37 @@ export const downloadFileFromCloud = async (filePath: string, fileName: string):
       chunks.push(chunk);
     }
     return Buffer.concat(chunks);
+  } catch (e) {
+    throw handleError(e);
+  }
+};
+
+export const getStreamFromCloud = async (filePath: string, fileName: string): Promise<Readable> => {
+  try {
+    const s3Client = new S3Client({
+      endpoint: process.env.S3_ENDPOINT,
+      region: process.env.S3_REGION,
+      forcePathStyle: true,
+      credentials: {
+        accessKeyId: process.env.S3_ACCESS_KEY_ID,
+        secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+      },
+    });
+
+    // filePath format: "https://endpoint/bucket/dir/" → extract "dir/" as key prefix
+    const url = new URL(filePath);
+    const pathParts = url.pathname.split('/').filter(Boolean); // [bucket, dir]
+    const keyPrefix = pathParts.slice(1).join('/'); // skip bucket name
+    const key = `${keyPrefix}/${fileName}`;
+
+    const response = await s3Client.send(
+      new GetObjectCommand({
+        Bucket: process.env.S3_BUCKET_NAME,
+        Key: key,
+      }),
+    );
+
+    return response.Body as Readable;
   } catch (e) {
     throw handleError(e);
   }
