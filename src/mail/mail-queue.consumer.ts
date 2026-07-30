@@ -3,7 +3,7 @@ import { Logger, UnauthorizedException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Job, UnrecoverableError } from 'bullmq';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { CampaignEmailLog } from '../entity/campaign-email-log.entity';
 import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { GmailAuthService } from './gmail-auth.service';
@@ -37,12 +37,24 @@ export class MailQueueConsumer extends WorkerHost {
     const payload = job.data;
     this.logger.log(`Processing email job ${job.id} → ${payload.to.join(',')}`);
 
-    // 1. Update log status to SENDING
+    // 1. Guard: nếu log đã bị set 'pending' (do auth fail trước đó), bỏ qua ngay
+    const existingLog = await this.emailLogRepository.findOne({
+      where: { id: payload.emailLogId },
+      select: ['id', 'status'],
+    });
+    if (existingLog?.status === 'pending') {
+      this.logger.warn(
+        `[${payload.campaignId}] Skipping job ${job.id} — log is pending (auth unavailable)`,
+      );
+      return;
+    }
+
+    // 2. Update log status to SENDING
     await this.emailLogRepository.update(payload.emailLogId, {
       status: 'sending',
     });
 
-    // 2. Get OAuth2 client with valid token
+    // 3. Get OAuth2 client with valid token
     let oauth2Client;
     try {
       oauth2Client = await this.gmailAuthService.getOAuth2Client(
@@ -56,6 +68,19 @@ export class MailQueueConsumer extends WorkerHost {
         });
 
         if (payload.campaignId) {
+          // Đặt tất cả email logs còn đang 'queued' / 'sending' của campaign → 'pending'
+          // để các job còn lại không bị xử lý lãng phí khi biết chắc token không hợp lệ
+          await this.emailLogRepository.update(
+            {
+              campaignId: payload.campaignId,
+              status: In(['queued', 'sending']),
+            },
+            { status: 'pending' },
+          );
+          this.logger.warn(
+            `[${payload.campaignId}] Auth failed — remaining queued jobs set to pending`,
+          );
+
           this.eventEmitter.emit('campaign.pause', {
             campaignId: payload.campaignId,
           });
@@ -72,7 +97,7 @@ export class MailQueueConsumer extends WorkerHost {
       throw error;
     }
 
-    // 3. Download attachments from S3 if present
+    // 4. Download attachments from S3 if present
     let emailAttachments: { filename: string; content: Buffer; contentType: string }[] | undefined;
     if (payload.attachments?.length) {
       emailAttachments = await Promise.all(
@@ -84,7 +109,7 @@ export class MailQueueConsumer extends WorkerHost {
       );
     }
 
-    // 4. Build raw MIME message
+    // 5. Build raw MIME message
     const raw = this.mailService.buildRawEmail({
       from: payload.from,
       to: payload.to,
@@ -96,7 +121,7 @@ export class MailQueueConsumer extends WorkerHost {
       attachments: emailAttachments,
     });
 
-    // 5. Send via Gmail API — use media upload for large messages (> 5 MB)
+    // 6. Send via Gmail API — use media upload for large messages (> 5 MB)
     const mail = gmail({ version: 'v1', auth: oauth2Client });
     const rawBuffer = Buffer.from(raw, 'base64url');
     let response;
@@ -121,7 +146,7 @@ export class MailQueueConsumer extends WorkerHost {
     const gmailMessageId = response.data.id;
     const now = new Date();
 
-    // 6. Update email log → SENT
+    // 7. Update email log → SENT
     await this.emailLogRepository
       .createQueryBuilder()
       .update(CampaignEmailLog)
@@ -133,7 +158,7 @@ export class MailQueueConsumer extends WorkerHost {
       .where('id = :id', { id: payload.emailLogId })
       .execute();
 
-    // 7. Emit email.sent event
+    // 8. Emit email.sent event
     this.eventEmitter.emit('email.sent', { payload, gmailMessageId });
 
     this.logger.log(
