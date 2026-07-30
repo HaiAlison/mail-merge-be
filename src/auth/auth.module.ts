@@ -7,6 +7,8 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { GoogleReconnectStrategy } from './strategies/google-reconnect.strategy';
+import { GoogleReconnectGuard } from './guards/google-reconnect.guard';
 import { UsersModule } from '../users/users.module';
 
 @Module({
@@ -27,7 +29,7 @@ import { UsersModule } from '../users/users.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, GoogleStrategy, JwtStrategy],
+  providers: [AuthService, GoogleStrategy, JwtStrategy, GoogleReconnectStrategy, GoogleReconnectGuard],
   exports: [AuthService, JwtModule],
 })
 export class AuthModule {}

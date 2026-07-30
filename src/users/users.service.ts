@@ -3,6 +3,7 @@ import { UpdateSettingsDto } from './dto/update-settings.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../entity/user.entity';
+import { include } from 'src/utils/config/database/hidden-cols-model';
 
 export type UpsertGoogleUserInput = {
   googleProviderId: string;
@@ -50,9 +51,15 @@ export class UsersService {
   }
 
   async findById(id: string): Promise<User> {
-    const user = await this.userRepository.findOne({ where: { id } });
+    const user = await this.userRepository.findOne({ where: { id }, select: include(this.userRepository, ['googleRefreshToken']) });
     if (!user) {
       throw new NotFoundException('User not found');
+    }
+    if (user.googleRefreshToken) {
+      user['hasGoogleRefreshToken'] = true
+    }
+    else {
+      user['hasGoogleRefreshToken'] = false
     }
     return user;
   }
