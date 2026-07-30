@@ -20,7 +20,7 @@ export class GmailAuthService {
    * Refreshes the token automatically if expired or missing.
    */
   async getOAuth2Client(userId: string): Promise<OAuth2Client> {
-    const user = await this.userRepository.findOne({ where: { id: userId }, select: ["googleRefreshToken"] });
+    const user = await this.userRepository.findOne({ where: { id: userId }, select: ["googleRefreshToken", 'id'] });
 
     if (!user) {
       throw new UnauthorizedException(`User ${userId} not found`);
