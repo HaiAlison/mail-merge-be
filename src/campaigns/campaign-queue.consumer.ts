@@ -85,6 +85,7 @@ export class CampaignQueueConsumer extends WorkerHost {
             campaignId,
             email: email.trim().toLowerCase(),
             data,
+            createdAt: new Date().toISOString(),
           } as any);
 
           if (batch.length >= BATCH_SIZE) {
