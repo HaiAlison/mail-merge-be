@@ -26,6 +26,8 @@ import { CursorPaginationDto } from 'src/utils/common/dto';
 import { Response } from 'src/utils/interceptors/transform.interceptor';
 import { CursorPaginationResponse } from 'src/utils/common/cursor-pagination';
 import { Campaign } from 'src/entity/campaign.entity';
+import { CampaignRecipient } from 'src/entity/campaign-recipient.entity';
+import { CampaignEmailLog } from 'src/entity/campaign-email-log.entity';
 
 @Controller('campaigns')
 export class CampaignsController {
@@ -73,6 +75,30 @@ export class CampaignsController {
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.campaignsService.remove(id);
+  }
+
+  @Get(':id/recipients')
+  @ApiOperation({
+    summary: 'List Campaign Recipients',
+    description: 'Cursor-paginated list of recipients for a campaign.',
+  })
+  findRecipients(
+    @Param('id') id: string,
+    @Query() pagination: CursorPaginationDto,
+  ): Promise<CursorPaginationResponse<CampaignRecipient>> {
+    return this.campaignsService.findRecipients(id, pagination);
+  }
+
+  @Get(':id/logs')
+  @ApiOperation({
+    summary: 'List Campaign Email Logs',
+    description: 'Cursor-paginated list of email logs for a campaign.',
+  })
+  findEmailLogs(
+    @Param('id') id: string,
+    @Query() pagination: CursorPaginationDto,
+  ): Promise<CursorPaginationResponse<CampaignEmailLog>> {
+    return this.campaignsService.findEmailLogs(id, pagination);
   }
 
   @Post(':id/recipients')

@@ -252,13 +252,33 @@ export class CampaignsService {
   async findOne(id: string) {
     const campaign = await this.campaignRepository.findOne({
       where: { id },
-      relations: ['recipients', 'attachments', 'dataSource', 'emailLogs', 'signature'],
-      select: include(this.campaignRepository, ['createdAt', 'updatedAt'])
+      relations: ['attachments', 'dataSource', 'signature'],
+      select: include(this.campaignRepository, ['createdAt', 'updatedAt']),
     });
     if (!campaign) {
       throw new NotFoundException(`Campaign with ID "${id}" not found`);
     }
     return campaign;
+  }
+
+  async findRecipients(
+    campaignId: string,
+    pagination: CursorPaginationDto,
+  ): Promise<CursorPaginationResponse<CampaignRecipient>> {
+    const qb = this.recipientRepository
+      .createQueryBuilder('recipient')
+      .where('recipient.campaign_id = :campaignId', { campaignId });
+    return cursorPagination(qb, { ...pagination, alias: 'recipient' });
+  }
+
+  async findEmailLogs(
+    campaignId: string,
+    pagination: CursorPaginationDto,
+  ): Promise<CursorPaginationResponse<CampaignEmailLog>> {
+    const qb = this.emailLogRepository
+      .createQueryBuilder('log')
+      .where('log.campaign_id = :campaignId', { campaignId });
+    return cursorPagination(qb, { ...pagination, alias: 'log' });
   }
 
   async update(id: string, updateCampaignDto: UpdateCampaignDto) {
