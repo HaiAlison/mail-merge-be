@@ -41,4 +41,26 @@ export class User extends BaseTimeStampEntity {
 
   @Column({ name: 'daily_limit', type: 'int', default: 500 })
   dailyLimit: number;
+
+  // ─── MFA ──────────────────────────────────────────────────────────────
+
+  @Column({
+    name: 'mfa_secret',
+    type: 'text',
+    nullable: true,
+    transformer: encryptionTransformer,
+    select: false,
+  })
+  mfaSecret: string | null;
+
+  @Column({ name: 'is_mfa_enabled', type: 'boolean', default: false })
+  isMfaEnabled: boolean;
+
+  @Column({
+    name: 'mfa_backup_codes',
+    type: 'text',
+    nullable: true,
+    select: false,
+  })
+  mfaBackupCodes: string | null;
 }

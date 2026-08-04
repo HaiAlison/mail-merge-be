@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../entity/user.entity';
 import { include } from 'src/utils/config/database/hidden-cols-model';
+import { GoogleAuthGuard } from 'src/auth/guards/google-auth.guard';
 
 export type UpsertGoogleUserInput = {
   googleProviderId: string;
@@ -61,6 +62,7 @@ export class UsersService {
     else {
       user['hasGoogleRefreshToken'] = false
     }
+    delete user.googleRefreshToken;
     return user;
   }
 
@@ -71,7 +73,7 @@ export class UsersService {
   }
 
   toPublicUser(user: User) {
-    const { googleRefreshToken: _, password: __, ...rest } = user;
+    const { googleRefreshToken: _, password: __, mfaSecret: ___, mfaBackupCodes: ____, ...rest } = user;
     return rest;
   }
 

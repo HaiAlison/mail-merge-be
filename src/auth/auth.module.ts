@@ -10,12 +10,14 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { GoogleReconnectStrategy } from './strategies/google-reconnect.strategy';
 import { GoogleReconnectGuard } from './guards/google-reconnect.guard';
 import { UsersModule } from '../users/users.module';
+import { MfaModule } from './mfa/mfa.module';
 
 @Module({
   imports: [
     PassportModule.register({ defaultStrategy: 'jwt' }),
     HttpModule,
     UsersModule,
+    MfaModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => ({
@@ -33,3 +35,4 @@ import { UsersModule } from '../users/users.module';
   exports: [AuthService, JwtModule],
 })
 export class AuthModule {}
+

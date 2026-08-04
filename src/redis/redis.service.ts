@@ -145,4 +145,34 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   async getOtpTtl(email: string): Promise<number> {
     return this.client.ttl(this.otpKey(email));
   }
+
+  // ─── MFA Rate Limiting ──────────────────────────────────────────────
+
+  private mfaAttemptsKey(userId: string) {
+    return `mfa_attempts:${userId}`;
+  }
+
+  /**
+   * Increment the failed MFA attempt count for a user.
+   * Locks them out for 15 minutes if they fail too many times.
+   */
+  async incrementMfaAttempts(userId: string): Promise<number> {
+    const key = this.mfaAttemptsKey(userId);
+    const attempts = await this.client.incr(key);
+    if (attempts === 5) {
+      await this.client.expire(key, 900); // 15 minutes window
+    }
+    return attempts;
+  }
+
+  /** Get the current number of failed MFA attempts for a user. */
+  async getMfaAttempts(userId: string): Promise<number> {
+    const attempts = await this.client.get(this.mfaAttemptsKey(userId));
+    return attempts ? parseInt(attempts, 10) : 0;
+  }
+
+  /** Reset the MFA failed attempts after a successful login. */
+  async resetMfaAttempts(userId: string): Promise<void> {
+    await this.client.del(this.mfaAttemptsKey(userId));
+  }
 }

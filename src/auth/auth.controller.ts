@@ -13,6 +13,7 @@ import { AuthService } from './auth.service';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
 import { GoogleReconnectGuard } from './guards/google-reconnect.guard';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { MfaVerifyLoginDto } from './mfa/dto/mfa-verify-login.dto';
 import { UsersService } from '../users/users.service';
 
 @Controller('auth')
@@ -35,16 +36,25 @@ export class AuthController {
     @Req()
     req: {
       user: {
-        user: { id: string; email: string };
+        user: { id: string; email: string; isMfaEnabled?: boolean };
         googleAccessToken: string;
-        googleRefreshToken: string;
       };
     },
     @Res() res: Response,
   ) {
     const { user } = req.user;
-    const tokens = this.authService.signTokens(user);
     const frontendUrl = this.configService.get<string>('FRONTEND_URL');
+
+    if (user.isMfaEnabled) {
+      const mfaToken = this.authService.signMfaToken(user);
+      const params = new URLSearchParams({
+        mfa_required: 'true',
+        mfa_token: mfaToken,
+      });
+      return res.redirect(`${frontendUrl}/auth/callback?${params.toString()}`);
+    }
+
+    const tokens = this.authService.signTokens(user);
     const params = new URLSearchParams({
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token,
@@ -74,7 +84,7 @@ export class AuthController {
     @Req()
     req: {
       user: {
-        user: { id: string; email: string };
+        user: { id: string; email: string; isMfaEnabled?: boolean };
         googleAccessToken: string;
         googleRefreshToken: string;
       };
@@ -82,8 +92,19 @@ export class AuthController {
     @Res() res: Response,
   ) {
     const { user } = req.user;
-    const tokens = this.authService.signTokens(user);
     const frontendUrl = this.configService.get<string>('FRONTEND_URL');
+
+    if (user.isMfaEnabled) {
+      const mfaToken = this.authService.signMfaToken(user);
+      const params = new URLSearchParams({
+        mfa_required: 'true',
+        mfa_token: mfaToken,
+        reconnected: 'true',
+      });
+      return res.redirect(`${frontendUrl}/auth/callback?${params.toString()}`);
+    }
+
+    const tokens = this.authService.signTokens(user);
     const params = new URLSearchParams({
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token,
@@ -91,6 +112,14 @@ export class AuthController {
       reconnected: 'true',
     });
     res.redirect(`${frontendUrl}/auth/callback?${params.toString()}`);
+  }
+
+  // ─── MFA Login Verification ───────────────────────────────────────
+
+  /** Exchange mfa_token + TOTP code for real access + refresh tokens */
+  @Post('mfa/verify-login')
+  async verifyMfaLogin(@Body() dto: MfaVerifyLoginDto) {
+    return this.authService.verifyMfaLogin(dto.mfa_token, dto.token);
   }
 
   // ─── Token Management ──────────────────────────────────────────────
@@ -107,3 +136,4 @@ export class AuthController {
     return this.authService.refreshGoogleOAuthToken(refresh_token);
   }
 }
+

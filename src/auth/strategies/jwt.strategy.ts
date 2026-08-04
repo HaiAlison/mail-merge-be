@@ -29,6 +29,11 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
         'Use refresh endpoint with refresh token',
       );
     }
+    if (payload.type === 'mfa') {
+      throw new UnauthorizedException(
+        'Use MFA verify-login endpoint with MFA token',
+      );
+    }
     try {
       return await this.usersService.findById(payload.sub);
     } catch {
